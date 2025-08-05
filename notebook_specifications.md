@@ -1,174 +1,216 @@
 
-## Credit Risk Forecasting Lab: Jupyter Notebook Specification
+# Jupyter Notebook Specification: Macro-Credit Model Builder
 
-### 1. Notebook Overview
+## 1. Notebook Overview
 
 **Learning Goals:**
 
-This notebook aims to provide a hands-on experience in building macroeconomic time series models for credit risk forecasting. Users will learn to:
-
-- Integrate and prepare credit-risk and macroeconomic data.
-- Identify structural breaks and regimes in time series data.
-- Transform data to achieve stationarity.
-- Build and evaluate econometric models (ARDL, VAR, ARIMAX) for credit risk forecasting.
-- Implement scenario forecasting and stress testing.
-- Effectively communicate results through visualizations and narratives.
+This notebook aims to guide users through building and evaluating macro-economic time series models for forecasting Probability of Default (PD) and Loss Given Default (LGD). It emphasizes compliance with IFRS 9/Basel requirements by incorporating macroeconomic scenarios. The goal is to provide a practical understanding of how macroeconomic factors impact credit risk.
 
 **Expected Outcomes:**
 
-Upon completion of this notebook, users should be able to:
+Upon completion of this notebook, users will be able to:
 
-- Understand the relationship between macroeconomic factors and credit risk metrics (PD and LGD).
-- Apply data cleaning and transformation techniques to time series data.
-- Develop and evaluate econometric models for credit risk forecasting.
-- Implement scenario forecasting and stress testing methodologies.
-- Interpret and communicate the impact of macroeconomic scenarios on credit risk.
+1.  Understand the regulatory necessity for forward-looking macro-credit models in PD/LGD estimation and stress testing.
+2.  Prepare credit risk and macroeconomic data for modeling, including stationarity transformations and structural break adjustments.
+3.  Identify and rank relevant macroeconomic drivers for credit risk.
+4.  Build, compare, and interpret ARDL, VAR, and ARIMAX models for credit risk forecasting.
+5.  Apply model selection techniques based on information criteria and residual diagnostics.
+6.  Generate baseline and stress-scenario forecasts for PD/LGD and visualize their potential impact.
 
-### 2. Mathematical and Theoretical Foundations
+## 2. Mathematical and Theoretical Foundations
 
-This section will provide a concise overview of the relevant mathematical and statistical concepts.
+### 2.1 Stationarity and Data Transformations
 
-**2.1 Probability of Default (PD) and Loss Given Default (LGD):**
+Many time series models require stationary data. Stationarity implies that the statistical properties of a time series, such as the mean and variance, do not change over time.  We will use the Augmented Dickey-Fuller (ADF) and Phillips-Perron (PP) tests to check for stationarity. Non-stationary data often require transformations. Common transformations include:
 
-- **Definition:**  $PD$ is the probability that a borrower will default on their debt obligations within a specified time horizon. $LGD$ is the percentage of loss expected if a default occurs.
-- **Real-world Application:**  $PD$ and $LGD$ are crucial inputs for credit risk management, regulatory capital calculations, and loan pricing.
-- **Formula:** Expected Loss (EL) can be defined as $EL = PD * LGD * EAD$, where EAD is Exposure at Default.
+*   **Logarithmic Transformation:**  Used to stabilize variance, especially when dealing with exponential growth. If $X_t$ is a time series, the logarithmic transformation is $Y_t = \ln(X_t)$.
 
-**2.2 Stationarity:**
+*   **Differencing:** Used to remove trends. The first difference is defined as $\Delta X_t = X_t - X_{t-1}$. Higher-order differencing can be applied if the first difference is not stationary.
 
-- **Definition:** A time series is stationary if its statistical properties (mean, variance, autocorrelation) do not change over time.
-- **Real-world Application:** Many time series models require stationarity for accurate forecasting.
-- **Testing:** Stationarity can be verified using Augmented Dickey-Fuller (ADF) and Phillips-Perron tests.
+*   **Percentage Change:** Used for rates. The percentage change is defined as $((X_t - X_{t-1})/X_{t-1}) * 100$.
 
-**2.3 Autoregressive Distributed Lag (ARDL) Model:**
+### 2.2 Autoregressive Distributed Lag (ARDL) Model
 
-- **Definition:** An ARDL model is a regression model that includes lagged values of both the dependent variable and independent variables.
+The ARDL model combines autoregressive (AR) terms of the dependent variable with lagged values of independent variables. A general ARDL(p, q) model can be represented as:
 
-- **Formula:** The general form of an ARDL(p, q, r) model is:
+$$Y_t = \alpha + \sum_{i=1}^{p} \phi_i Y_{t-i} + \sum_{j=0}^{q} \beta_j X_{t-j} + \epsilon_t$$
 
-$$y_t = \alpha + \sum_{i=1}^{p} \phi_i y_{t-i} + \sum_{j=1}^{q} \beta_j x_{1,t-j} + \sum_{k=1}^{r} \gamma_k x_{2,t-k} + \epsilon_t$$
+where:
+*   $Y_t$ is the dependent variable at time $t$.
+*   $X_t$ is the independent variable at time $t$.
+*   $p$ is the order of the autoregressive component.
+*   $q$ is the order of the distributed lag component.
+*   $\phi_i$ are the coefficients of the lagged dependent variables.
+*   $\beta_j$ are the coefficients of the lagged independent variables.
+*   $\alpha$ is the intercept.
+*   $\epsilon_t$ is the error term.
+
+### 2.3 Vector Autoregression (VAR) Model
+
+A VAR model is a multivariate time series model that captures the interdependencies among multiple variables. A VAR(p) model can be represented as:
+
+$$Y_t = c + A_1 Y_{t-1} + A_2 Y_{t-2} + ... + A_p Y_{t-p} + \epsilon_t$$
+
+where:
+*   $Y_t$ is a vector of $k$ variables at time $t$.
+*   $c$ is a $k \times 1$ vector of intercepts.
+*   $A_i$ are $k \times k$ coefficient matrices.
+*   $p$ is the order of the VAR model.
+*   $\epsilon_t$ is a $k \times 1$ vector of error terms.
+
+### 2.4 ARIMAX Model
+
+An ARIMAX model extends the ARIMA model by including exogenous variables. The general form of an ARIMAX(p, d, q) model is:
+
+$$\phi(B)(1-B)^d Y_t = \theta(B) \epsilon_t + C(B)X_t$$
 
 Where:
-    - $y_t$ is the dependent variable at time $t$.
-    - $x_{1,t}$ and $x_{2,t}$ are independent variables at time $t$.
-    - $p$, $q$, and $r$ are the lag orders for the dependent and independent variables, respectively.
-    - $\phi_i$, $\beta_j$, and $\gamma_k$ are coefficients.
-    - $\epsilon_t$ is the error term.
-- **Real-world Application:** ARDL models are useful for capturing both the persistence of the dependent variable and the lagged effects of independent variables.  An example, as mentioned in the prompt, could be:
+*   $Y_t$ is the time series being modeled.
+*   $X_t$ is the exogenous variable.
+*   $B$ is the backshift operator ($BY_t = Y_{t-1}$).
+*   $\phi(B)$ is the autoregressive polynomial of order $p$.
+*   $\theta(B)$ is the moving average polynomial of order $q$.
+*   $d$ is the order of integration (number of differences required for stationarity).
+*   $C(B)$ represents the impact of the exogenous variable $X_t$.
+*   $\epsilon_t$ is the error term.
 
-$$ \text{DefaultRate}_t = \alpha + \sum_{i=1}^{p} \phi_i \text{DefaultRate}_{t-i} + \sum_{j=1}^{q} \beta_j \text{Unemployment}_{t-j} + \sum_{k=1}^{r} \gamma_k \text{GDPGrowth}_{t-k} + \epsilon_t$$
+### 2.5 Model Selection Criteria
 
-**2.4 Vector Autoregression (VAR) Model:**
+*   **Akaike Information Criterion (AIC):** A measure of the relative quality of statistical models for a given set of data. AIC is defined as:
 
-- **Definition:** A VAR model is a multivariate time series model that captures the interdependencies between multiple variables.
-- **Formula:**
-For a two-variable VAR(p) model:
-$$y_t = c + A_1 y_{t-1} + A_2 y_{t-2} + \dots + A_p y_{t-p} + \epsilon_t$$
-where $y_t = \begin{bmatrix} y_{1t} \\ y_{2t} \end{bmatrix}$ is a vector of two time series variables, $c$ is a constant vector, $A_i$ are coefficient matrices, and $\epsilon_t$ is a vector of error terms.
-- **Real-world Application:** VAR models are useful for jointly modeling multiple related time series, such as default rates, GDP growth, and unemployment.
+$$AIC = 2k - 2\ln(L)$$
 
-**2.5 ARIMAX Model:**
+where:
+*   $k$ is the number of parameters in the model.
+*   $L$ is the maximized value of the likelihood function for the model.
 
-- **Definition:**  An ARIMAX model extends the ARIMA model by including exogenous variables.
-- **Formula:** The ARIMAX model can be expressed as:
-$(1 - \sum_{i=1}^{p} \phi_i L^i)(1-L)^d y_t = (1 + \sum_{i=1}^{q} \theta_i L^i) (\sum_{j=1}^{k} \beta_j x_{jt} + \epsilon_t)$
-Where:
-$y_t$ is the time series being forecasted.
-$x_{jt}$ are the exogenous variables.
-$L$ is the lag operator.
-$p, d, q$ are the orders of the autoregressive, integrated, and moving average parts of the model.
-$\phi_i, \theta_i, \beta_j$ are the model coefficients.
-$\epsilon_t$ is the error term.
-- **Real-world Application:** ARIMAX models are useful when the time series is influenced by external factors, allowing for more accurate forecasting.
+*   **Bayesian Information Criterion (BIC):** Similar to AIC, but with a stronger penalty for model complexity.  BIC is defined as:
 
-**2.6 Variance Inflation Factor (VIF):**
+$$BIC = \ln(n)k - 2\ln(L)$$
 
-- **Definition:** VIF quantifies the severity of multicollinearity in a multiple regression model. It measures how much the variance of an estimated regression coefficient increases if your predictors are correlated.
-- **Formula:** $VIF_i = \frac{1}{1 - R_i^2}$ , where $R_i^2$ is the R-squared value from regressing the $i$-th predictor on all other predictors in the model.
-- **Real-world Application:** High VIF values (typically > 5) indicate strong multicollinearity, which can lead to unstable and unreliable regression coefficients.
+where:
+*   $n$ is the number of data points.
+*   $k$ is the number of parameters in the model.
+*   $L$ is the maximized value of the likelihood function for the model.
 
-### 3. Code Requirements
+### 2.6 Residual Diagnostics
 
-**3.1 Expected Libraries:**
+*   **Durbin-Watson Test:** Tests for autocorrelation in the residuals of a regression model.
 
--   `pandas`: For data manipulation and analysis (ingestion, cleaning, transformation, and storage).
--   `numpy`: For numerical computations.
--   `matplotlib` or `seaborn`: For creating visualizations (time series plots, correlation heatmaps, forecast outputs).
--   `statsmodels`: For econometric modeling (ARDL, VAR, ARIMAX), stationarity tests (ADF, Phillips-Perron), and VIF calculation.
--   `scikit-learn`: For potential seasonal decomposition or detrending.
--   `pmdarima`: For easier ARIMA model selection.
+*   **Ljung-Box Test:**  A more general test for autocorrelation.
 
-**3.2 Input/Output Expectations:**
+*   **White's Test:** Tests for heteroscedasticity (non-constant variance) in the residuals.
 
--   **Input:**
-    -   Synthetic datasets containing quarterly credit-risk series (default rates by segment, average LGDs) and macroeconomic drivers (Real GDP growth, oil prices, inflation, unemployment rate, interest rates, stock index). Data will come from CSV. User will also be able to enter custom data.
-    -   User-defined macroeconomic scenarios (grid or JSON format).
--   **Output:**
-    -   DataFrames containing cleaned and transformed data.
-    -   Model summaries and diagnostic statistics.
-    -   Point forecasts of credit risk metrics (PD and LGD).
-    -   Visualizations (time series plots, correlation heatmaps, forecast outputs).
-    -   CSV/Excel files containing point forecasts.
-    -   Transformation log.
+*   **ARCH Test:** Tests for autoregressive conditional heteroscedasticity.
 
-**3.3 Algorithms/Functions to be Implemented:**
+*   **Jarque-Bera Test:** Tests for normality of the residuals.
 
-1.  **Data Ingestion and Cleaning Functions:**
-    -   Function to import credit-risk and macroeconomic data from CSV files.
-    -   Function to perform data quality checks (missing values, outliers).
-    -   Function to align timelines and manage lags/missing values.
+## 3. Code Requirements
 
-2.  **Data Transformation Functions:**
-    -   Function to apply YoY %/QoQ % changes.
-    -   Function to apply log-differences.
-    -   Function to perform seasonal adjustment.
-    -   Function to normalize data (e.g., real terms, per-capita or GDP-scaled metrics).
+### 3.1 Expected Libraries
 
-3.  **Stationarity Testing Functions:**
-    -   Function to perform ADF test.
-    -   Function to perform Phillips-Perron test.
+The following Python libraries are expected to be used:
 
-4.  **Correlation and Multicollinearity Check Functions:**
-    -   Function to compute pairwise correlations.
-    -   Function to compute VIF.
+*   **pandas:** For data manipulation and analysis.
+*   **numpy:** For numerical computations.
+*   **statsmodels:** For statistical modeling and time series analysis.
+*   **joblib:** For serializing and deserializing models.
+*   **matplotlib:** For creating static, interactive, and animated visualizations in Python.
+*   **seaborn:** For making statistical graphics.
+*   **arch:** For volatility modeling (ARCH/GARCH).
+*   **pmdarima:** For ARIMA model selection.
+*   **yaml:** For handling YAML configurations
 
-5.  **Model Building Functions:**
-    -   Function to fit ARDL models.
-    -   Function to fit VAR models.
-    -   Function to fit ARIMAX models.
-    -   Function to calculate goodness-of-fit measures (Adjusted R², AIC/BIC).
+### 3.2 Data Ingestion and Cleaning
 
-6.  **Scenario Forecasting Functions:**
-    -   Function to accept user-defined macroeconomic scenarios.
-    -   Function to implement recursive forecasting logic.
+*   **Input:** The notebook should be able to ingest the Taiwan credit card default dataset and macroeconomic data (GDP growth, CPI inflation, unemployment rate, etc.).
+*   **Output:** A cleaned and merged pandas DataFrame `taiwan_macro_panel.parquet` containing quarterly PD, LGD (optional), and macroeconomic data from 2015 Q1 to 2024 Q4. This DataFrame should be saved to a file.
+*   **Algorithms/Functions:**
+    *   Functions to download or load the datasets.
+    *   Functions to merge and align datasets based on dates.
+    *   Functions to handle missing data.
 
-7.  **Visualization Functions:**
-    -   Function to generate time-series plots.
-    -   Function to generate correlation heatmaps.
-    -   Function to generate forecast outputs (term structure plots, stress multipliers).
+### 3.3 Data Transformation
 
-**3.4 Visualizations:**
+*   **Input:** The merged DataFrame from the previous step.
+*   **Output:** A transformed DataFrame with stationary time series.  The transformations applied should be stored in a `data_transform.yaml` file.
+*   **Algorithms/Functions:**
+    *   Functions to apply log-diff, percent-change, or other transformations.
+    *   Functions to perform ADF and PP tests.
+    *   Functions to store the transformation metadata in `data_transform.yaml`.
 
--   Exploratory time-series plots: macro variable vs corresponding credit metric with shaded break periods.
--   Correlation & lag visuals: heat-map of pairwise correlations and cross-correlation bar plots.
--   Forecast outputs: line chart of historical + baseline + stress scenarios (plus confidence bands if produced) and bar chart/table of stress multipliers.
+### 3.4 Exploratory Data Analysis (EDA)
 
-### 4. Additional Notes or Instructions
+*   **Input:** The transformed DataFrame.
+*   **Output:**
+    *   Time-series plots of PD vs. macro variables.
+    *   Correlation heatmap of transformed variables.
+    *   ACF and PACF plots for PD.
+*   **Algorithms/Functions:**
+    *   Functions to generate time series plots.
+    *   Functions to calculate and visualize the correlation matrix.
+    *   Functions to generate ACF and PACF plots.
 
--   **Assumptions:**
-    -   Synthetic data is representative of real-world credit risk and macroeconomic relationships.
-    -   The chosen macroeconomic variables are relevant drivers of credit risk.
-    -   Stationarity is a necessary condition for accurate forecasting.
--   **Constraints:**
-    -   The models are limited to ARDL, VAR, and ARIMAX frameworks.
-    -   The data is limited to quarterly frequency.
--   **Customization Instructions:**
-    -   Users should be able to select the jurisdiction and segment for analysis.
-    -   Users should be able to specify the lag structures for the models.
-    -   Users should be able to define custom macroeconomic scenarios.
-    -   Users should be able to save the point forecasts and plots to CSV/Excel files.
-- **Reproducibility features:** fixed random seed, printed library versions, and parameterised jurisdiction/segment selectors.
-- **Transformation Log**: Automatically track variable transformations and stationarity results.
-- **Correlation & Multicollinearity Checks**: Compute correlations and VIF, with warnings when VIF > 5.
-- **Beginner-friendly commentary**: inline explanations linking economic reasoning to each code step.
+### 3.5 Model Building
 
+*   **Input:** The transformed DataFrame.
+*   **Output:** Fitted ARDL, VAR, and ARIMAX models.
+*   **Algorithms/Functions:**
+    *   Functions to fit ARDL models using `statsmodels`.
+    *   Functions to fit VAR models using `statsmodels`.
+    *   Functions to fit ARIMAX models using `pmdarima` or `statsmodels`.
+    *   Functions for lag selection (e.g., using information criteria).
+
+### 3.6 Model Diagnostics
+
+*   **Input:** Fitted models and residuals.
+*   **Output:**
+    *   Residual ACF plots.
+    *   QQ-plots of residuals.
+    *   Bar plots of ARCH LM test p-values.
+*   **Algorithms/Functions:**
+    *   Functions to calculate and plot residual ACF.
+    *   Functions to generate QQ-plots.
+    *   Functions to perform and visualize ARCH LM tests.
+    *   Functions for Durbin-Watson, Ljung-Box, Jarque-Bera tests.
+
+### 3.7 Scenario Forecasting
+
+*   **Input:** Fitted model, `data_transform.yaml`, and user-specified macro scenarios.
+*   **Output:** Forecasts of PD/LGD under baseline and stress scenarios.
+*   **Algorithms/Functions:**
+    *   Functions to generate forecasts using the fitted models.
+    *   Functions to incorporate macro scenarios into the forecasts.
+    *   Functions to transform forecast back to original space using `data_transform.yaml`.
+    *   Functions to generate fan charts/confidence intervals.
+
+### 3.8 Visualization
+
+*   **Input:** Baseline and stress scenario PD pathways.
+*   **Output:**
+    *   Plots of baseline vs. stress scenario PD pathways with fan-charts/confidence intervals.
+    *   Table of stress multipliers.
+
+### 3.9 Model Serialization
+*   **Input:** Fitted models
+*   **Output:** Serialized models (.pkl files) in the `models/` directory using `joblib`.
+
+## 4. Additional Notes or Instructions
+
+*   **Data Assumptions:** Assume quarterly frequency for all time series.
+*   **Stationarity:** Ensure all time series are stationary before modeling.
+*   **Reproducibility:** Fix random seeds for reproducibility and record library versions.
+*   **Model Storage:** Store fitted models in the `models/` directory.
+*   **Transformation Storage**: Store transformation metadata in `data_transform.yaml`.
+*   **Naming Conventions:** Use consistent naming conventions for variables and functions.  Example: `taiwan_pd_quarterly.csv` for the quarterly PD data, `PD_ARDL_L1U2.pkl` for the serialized ARDL model.
+*   **User Instructions:**
+    *   Include clear markdown explanations for each step.
+    *   Comment code blocks thoroughly.
+*   **Stress Scenarios:** stress scenarios should represent reasonable macroeconomic downturns.
+*   **Model Hand-off:** Clearly state the selected champion model and required files for subsequent use.  For example: "The selected champion model is PD_ARDL_L1U2.pkl stored in models/. Part 2 will begin by loading this file together with data_transform.yaml."
+*   **Structural Breaks:** Incorporate regime dummies for structural breaks (e.g., COVID-19, VAT launch).
+*   **References:** At the end of the notebook provide a reference section with links or citations used. Example:
+```html
+   1. Taiwan Credit Card Default Dataset: [UCI Machine Learning Repository](https://archive.ics.uci.edu/ml/datasets/default+of+credit+card+clients)
+```
