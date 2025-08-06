@@ -1,185 +1,142 @@
 import pytest
 import pandas as pd
 import numpy as np
-from unittest.mock import MagicMock, patch
+import statsmodels.tsa.api as smt
 
-# Keep a placeholder definition_2e30b571d196476bbcc2b012e8cd2d3f for the import of the module.
-# Keep the `your_module` block as it is. DO NOT REPLACE or REMOVE the block.
-from definition_2e30b571d196476bbcc2b012e8cd2d3f import train_arimax
+# Placeholder for the module import
+from definition_cc5e64457e604768a0eeceee5615e5c5 import train_arimax
 
-# --- Mocking statsmodels components ---
-
-# Mock the ARIMAXResultsWrapper for the fitted model output
-class MockARIMAXResultsWrapper:
-    def __init__(self):
-        self.aic = 100.0
-        self.bic = 120.0
-        self.summary = MagicMock(return_value="Mock Model Summary")
-        # Generate some dummy residuals for the Ljung-Box test
-        self.resid = pd.Series(np.random.randn(30), index=pd.date_range(start='2020-01-01', periods=30, freq='QS'))
-
-# Mock the ARIMAX class from statsmodels.tsa.arima.model
-class MockARIMAX:
-    def __init__(self, endog, exog, order, **kwargs):
-        self.endog = endog
-        self.exog = exog
-        self.order = order
-
-        # Simulate basic statsmodels input validation
-        if not isinstance(order, tuple) or len(order) != 3 or not all(isinstance(i, int) and i >= 0 for i in order):
-            raise ValueError("ARIMAX order must be a 3-tuple of non-negative integers (p, d, q).")
-        if not isinstance(endog, pd.Series) or endog.empty:
-             raise ValueError("endog must be a non-empty pandas Series.")
-        if exog is not None and (not isinstance(exog, pd.DataFrame) or exog.empty):
-             raise ValueError("exog must be a non-empty pandas DataFrame or None.")
-        # Minimal check for sufficient data points relative to order
-        if len(endog) < max(order) + 1:
-            raise ValueError(f"Not enough observations ({len(endog)}) for the specified ARIMAX order {order}.")
-
-    def fit(self):
-        # Simulate successful fitting
-        return MockARIMAXResultsWrapper()
-
-# Mock statsmodels.graphics.tsaplots.plot_acf and plot_pacf to prevent actual plotting during tests
-def mock_plot_func(*args, **kwargs):
-    pass
-
-# Mock statsmodels.stats.diagnostic.acorr_ljungbox for the Ljung-Box test results
-# The `train_arimax` function is expected to take the output of this mock
-# and format it into the required diagnostic DataFrame.
-def mock_acorr_ljungbox(x, lags=None, boxpierce=False, model_df=0, period=None, return_df=True):
-    if not isinstance(x, pd.Series) or x.empty:
-        raise ValueError("Residuals series cannot be empty for Ljung-Box test.")
-    
-    _lags = lags if lags is not None else [1, 5, 10]
-    
-    # Simulate statsmodels.stats.diagnostic.acorr_ljungbox(..., return_df=True) output
-    # This typically returns a DataFrame with 'lb_stat' and 'lb_pvalue'
+# Helper function to create a dummy DataFrame for testing
+def _create_dummy_df(num_rows=50, include_exog=True, include_nan=False, non_numeric=False):
+    """Creates a dummy pandas DataFrame for testing ARIMAX functions."""
+    dates = pd.date_range(start='2010-01-01', periods=num_rows, freq='QS') # Quarterly frequency
     data = {
-        'lb_stat': np.random.rand(len(_lags)) * 10, # Dummy Ljung-Box statistic values
-        'lb_pvalue': np.random.rand(len(_lags)) * 0.5 + 0.5 # Dummy p-values (simulating white noise)
+        'target_col': np.random.rand(num_rows) * 100 + 10 # Ensure values are positive for potential log transformations
     }
-    df_result = pd.DataFrame(data, index=pd.Index(_lags, name='Lags'))
-    return df_result
-
-# Helper function to create dummy dataframes for tests
-def create_dummy_df(rows=30, target_col='target', exog_cols=['exog1', 'exog2']):
-    dates = pd.date_range(start='2020-01-01', periods=rows, freq='QS')
-    df = pd.DataFrame(np.random.rand(rows, len(exog_cols) + 1), columns=[target_col] + exog_cols, index=dates)
+    if include_exog:
+        data['exog_col_1'] = np.random.rand(num_rows) * 50
+        data['exog_col_2'] = np.random.rand(num_rows) * 20
+    
+    df = pd.DataFrame(data, index=dates)
     df.index.name = 'Quarter'
+    
+    if non_numeric and num_rows > 0:
+        df.loc[df.index[0], 'target_col'] = 'abc' # Introduce non-numeric value
+    
+    if include_nan and num_rows > 5:
+        # Introduce NaNs in the middle of the series
+        df.loc[df.index[int(num_rows/2)], 'target_col'] = np.nan
+        if include_exog:
+            df.loc[df.index[int(num_rows/2) + 1], 'exog_col_1'] = np.nan
+            
     return df
 
-# --- Test Cases ---
+@pytest.fixture
+def dummy_df_with_exog():
+    return _create_dummy_df(num_rows=100, include_exog=True)
 
-@patch('statsmodels.tsa.arima.model.ARIMAX', new=MockARIMAX)
-@patch('statsmodels.graphics.tsaplots.plot_acf', new=mock_plot_func)
-@patch('statsmodels.graphics.tsaplots.plot_pacf', new=mock_plot_func)
-@patch('statsmodels.stats.diagnostic.acorr_ljungbox', new=mock_acorr_ljungbox)
-def test_train_arimax_success():
+@pytest.fixture
+def dummy_df_no_exog():
+    return _create_dummy_df(num_rows=100, include_exog=False)
+
+@pytest.fixture
+def dummy_df_small():
+    return _create_dummy_df(num_rows=10, include_exog=True)
+
+
+# Test Case 1: Happy Path with exogenous variables
+def test_train_arimax_happy_path_with_exog(dummy_df_with_exog):
     """
-    Test Case 1: Verifies successful model training and diagnostic results generation
-    with valid inputs (standard expected functionality).
+    Tests the function with valid data, target, exogenous variables, and model order.
+    Asserts that a fitted model object and a Ljung-Box DataFrame are returned,
+    and that their basic properties (type, content) are as expected.
     """
-    df = create_dummy_df()
-    target_col = 'target'
-    exog_cols = ['exog1', 'exog2']
+    target_col = 'target_col'
+    exog_cols = ['exog_col_1', 'exog_col_2']
+    order = (1, 1, 1) # (p, d, q)
+
+    fitted_model, ljung_box_results = train_arimax(dummy_df_with_exog, target_col, exog_cols, order)
+
+    # Assertions for the fitted model object
+    # Expecting an instance of statsmodels results wrapper, or at least an object with common attributes
+    assert hasattr(fitted_model, 'aic'), "Fitted model should have an AIC attribute"
+    assert hasattr(fitted_model, 'bic'), "Fitted model should have a BIC attribute"
+    assert hasattr(fitted_model, 'summary'), "Fitted model should have a summary method"
+    assert fitted_model.df_model > 0, "Model should have positive degrees of freedom"
+
+    # Assertions for Ljung-Box results DataFrame
+    assert isinstance(ljung_box_results, pd.DataFrame), "Ljung-Box results should be a DataFrame"
+    assert not ljung_box_results.empty, "Ljung-Box results DataFrame should not be empty"
+    assert 'lb_pvalue' in ljung_box_results.columns, "Ljung-Box DataFrame should contain 'lb_pvalue' column"
+    assert ljung_box_results['lb_pvalue'].dtype in [np.float64, np.float32], "Ljung-Box p-values should be numeric"
+
+
+# Test Case 2: Happy Path without exogenous variables (effectively an ARIMA model)
+def test_train_arimax_no_exog(dummy_df_no_exog):
+    """
+    Tests the function's behavior when no exogenous variables are provided.
+    It should gracefully handle an empty exog_cols list, effectively training an ARIMA model.
+    """
+    target_col = 'target_col'
+    exog_cols = [] # No exogenous variables
     order = (1, 1, 1)
 
-    fitted_model, diagnostic_results = train_arimax(df, target_col, exog_cols, order)
+    fitted_model, ljung_box_results = train_arimax(dummy_df_no_exog, target_col, exog_cols, order)
 
-    # Assert the type and expected attributes of the fitted model
-    assert isinstance(fitted_model, MockARIMAXResultsWrapper)
-    assert fitted_model.aic == 100.0
-    assert fitted_model.bic == 120.0
-    assert fitted_model.summary.called # Ensure summary was accessed
-
-    # Assert the diagnostic results DataFrame structure and content
-    assert isinstance(diagnostic_results, pd.DataFrame)
-    assert not diagnostic_results.empty
-    assert 'P-value' in diagnostic_results.columns # As per notebook spec
-    assert 'Ljung-Box Statistic' in diagnostic_results.columns # As per notebook spec
-    assert 'Lag' == diagnostic_results.index.name # Assuming 'Lag' is the index name
+    assert hasattr(fitted_model, 'aic'), "Fitted model should have an AIC attribute"
+    assert isinstance(ljung_box_results, pd.DataFrame), "Ljung-Box results should be a DataFrame"
+    assert not ljung_box_results.empty, "Ljung-Box results DataFrame should not be empty"
 
 
-@patch('statsmodels.tsa.arima.model.ARIMAX', new=MockARIMAX)
-@patch('statsmodels.graphics.tsaplots.plot_acf', new=mock_plot_func)
-@patch('statsmodels.graphics.tsaplots.plot_pacf', new=mock_plot_func)
-@patch('statsmodels.stats.diagnostic.acorr_ljungbox', new=mock_acorr_ljungbox)
-def test_train_arimax_empty_dataframe():
+# Test Case 3: Invalid Input Types
+@pytest.mark.parametrize("df_input, target_col, exog_cols, order, expected_error", [
+    (None, 'target_col', ['exog_col_1'], (1,1,1), TypeError), # df is None
+    (_create_dummy_df(), 123, ['exog_col_1'], (1,1,1), TypeError), # target_col is int
+    (_create_dummy_df(), 'target_col', 'exog_col_1', (1,1,1), TypeError), # exog_cols is str
+    (_create_dummy_df(), 'target_col', ['exog_col_1'], [1,1,1], TypeError), # order is list
+    (_create_dummy_df(), 'target_col', ['exog_col_1'], (1,1), TypeError), # order wrong length (too short)
+    (_create_dummy_df(), 'target_col', ['exog_col_1'], (1,1,1,1), TypeError), # order wrong length (too long)
+])
+def test_train_arimax_invalid_input_types(df_input, target_col, exog_cols, order, expected_error):
     """
-    Test Case 2: Checks handling when an empty input DataFrame is provided.
-    Expects a ValueError from the mocked ARIMAX constructor due to empty endog.
+    Tests scenarios where input arguments have incorrect data types, expecting TypeErrors.
     """
-    df = pd.DataFrame(index=pd.date_range(start='2020-01-01', periods=0, freq='QS')) # Empty DataFrame
-    target_col = 'target'
-    exog_cols = ['exog1']
-    order = (1, 0, 0)
+    with pytest.raises(expected_error):
+        train_arimax(df_input, target_col, exog_cols, order)
 
-    with pytest.raises(ValueError, match="endog must be a non-empty pandas Series."):
+
+# Test Case 4: Invalid Column Names or Data Content
+@pytest.mark.parametrize("df_modifier, target_col, exog_cols, order, expected_error", [
+    (lambda: _create_dummy_df(), 'non_existent_target', ['exog_col_1'], (1,1,1), KeyError), # Target col not in df
+    (lambda: _create_dummy_df(), 'target_col', ['non_existent_exog'], (1,1,1), KeyError), # Exog col not in df
+    (lambda: _create_dummy_df(num_rows=0), 'target_col', ['exog_col_1'], (1,1,1), ValueError), # Empty DataFrame
+    (lambda: _create_dummy_df(non_numeric=True), 'target_col', ['exog_col_1'], (1,1,1), (ValueError, TypeError)), # Non-numeric data
+    (lambda: _create_dummy_df(include_nan=True, num_rows=20), 'target_col', ['exog_col_1'], (1,1,1), (ValueError, RuntimeError, TypeError)), # NaNs, statsmodels might raise an error if not enough data after dropna
+])
+def test_train_arimax_invalid_data_or_columns(df_modifier, target_col, exog_cols, order, expected_error):
+    """
+    Tests scenarios where column names are incorrect, DataFrame is empty, or contains non-numeric/NaN data.
+    """
+    df = df_modifier()
+    with pytest.raises(expected_error):
         train_arimax(df, target_col, exog_cols, order)
 
 
-@patch('statsmodels.tsa.arima.model.ARIMAX', new=MockARIMAX)
-@patch('statsmodels.graphics.tsaplots.plot_acf', new=mock_plot_func)
-@patch('statsmodels.graphics.tsaplots.plot_pacf', new=mock_plot_func)
-@patch('statsmodels.stats.diagnostic.acorr_ljungbox', new=mock_acorr_ljungbox)
-def test_train_arimax_missing_target_column():
+# Test Case 5: Insufficient Data or Invalid Order Values
+@pytest.mark.parametrize("order, expected_error", [
+    ((1, 1, 1), (ValueError, np.linalg.LinAlgError, RuntimeError)), # Small df for this order
+    ((-1, 1, 1), ValueError), # Negative p order
+    ((1, -1, 1), ValueError), # Negative d order
+    ((1, 1, -1), ValueError), # Negative q order
+    ((5, 5, 5), (ValueError, np.linalg.LinAlgError, RuntimeError)), # Very high order for small df
+])
+def test_train_arimax_insufficient_data_or_invalid_order_values(dummy_df_small, order, expected_error):
     """
-    Test Case 3: Verifies handling when the specified target column is not found in the DataFrame.
-    Expects a KeyError from pandas column selection.
+    Tests cases where the DataFrame is too small for the specified model order,
+    or where the ARIMAX order parameters (p, d, q) are invalid (e.g., negative).
     """
-    df = create_dummy_df(target_col='actual_target') # DataFrame has 'actual_target'
-    target_col = 'non_existent_target' # Requesting a missing column
-    exog_cols = ['exog1']
-    order = (1, 0, 0)
-
-    with pytest.raises(KeyError, match=f"'{target_col}'"):
-        train_arimax(df, target_col, exog_cols, order)
-
-
-@patch('statsmodels.tsa.arima.model.ARIMAX', new=MockARIMAX)
-@patch('statsmodels.graphics.tsaplots.plot_acf', new=mock_plot_func)
-@patch('statsmodels.graphics.tsaplots.plot_pacf', new=mock_plot_func)
-@patch('statsmodels.stats.diagnostic.acorr_ljungbox', new=mock_acorr_ljungbox)
-def test_train_arimax_missing_exogenous_column():
-    """
-    Test Case 4: Verifies handling when one or more specified exogenous columns are not found in the DataFrame.
-    Expects a KeyError from pandas column selection.
-    """
-    df = create_dummy_df(exog_cols=['exog_present']) # DataFrame has 'exog_present'
-    target_col = 'target'
-    exog_cols = ['exog_present', 'non_existent_exog'] # Requesting a missing column
-    order = (1, 0, 0)
-
-    with pytest.raises(KeyError, match=f"['non_existent_exog']"): # Pandas KeyError for list of columns
-        train_arimax(df, target_col, exog_cols, order)
-
-
-@patch('statsmodels.tsa.arima.model.ARIMAX', new=MockARIMAX)
-@patch('statsmodels.graphics.tsaplots.plot_acf', new=mock_plot_func)
-@patch('statsmodels.graphics.tsaplots.plot_pacf', new=mock_plot_func)
-@patch('statsmodels.stats.diagnostic.acorr_ljungbox', new=mock_acorr_ljungbox)
-def test_train_arimax_invalid_order_format():
-    """
-    Test Case 5: Checks handling of an invalid `order` parameter (e.g., wrong type, wrong length, non-integers).
-    Expects a ValueError from the mocked ARIMAX constructor's input validation.
-    """
-    df = create_dummy_df()
-    target_col = 'target'
-    exog_cols = ['exog1']
-
-    # Test with non-tuple order
-    with pytest.raises(ValueError, match="ARIMAX order must be a 3-tuple of non-negative integers"):
-        train_arimax(df, target_col, exog_cols, "invalid_order")
-
-    # Test with tuple of wrong length
-    with pytest.raises(ValueError, match="ARIMAX order must be a 3-tuple of non-negative integers"):
-        train_arimax(df, target_col, exog_cols, (1, 2)) # Length 2
-
-    # Test with non-integer elements in tuple
-    with pytest.raises(ValueError, match="ARIMAX order must be a 3-tuple of non-negative integers"):
-        train_arimax(df, target_col, exog_cols, (1, 'a', 3)) # 'a' is not int
-
-    # Test with negative integers (statsmodels requires non-negative for p, d, q)
-    with pytest.raises(ValueError, match="ARIMAX order must be a 3-tuple of non-negative integers"):
-        train_arimax(df, target_col, exog_cols, (-1, 0, 0)) # -1 is not non-negative
+    target_col = 'target_col'
+    exog_cols = ['exog_col_1'] # Include exog for more realistic small data scenario
+    
+    with pytest.raises(expected_error):
+        train_arimax(dummy_df_small, target_col, exog_cols, order)
