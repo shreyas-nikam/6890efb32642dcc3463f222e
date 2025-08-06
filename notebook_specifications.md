@@ -113,6 +113,21 @@ The following Python libraries will be used:
 
 *   **Input Data**:
 **Input data** (two CSVs to be placed in `/data/`):
+users won't be uploading the .csv file so here are the steps to load the dataset:
+* steps to load the data:
+```python 
+pip install ucimlrepo
+from ucimlrepo import fetch_ucirepo
+# fetch dataset
+default_of_credit_card_clients = fetch_ucirepo(id=350)
+# data (as pandas dataframes)
+X = default_of_credit_card_clients.data.features
+y = default_of_credit_card_clients.data.targets
+# metadata
+print(default_of_credit_card_clients.metadata)
+# variable information
+print(default_of_credit_card_clients.variables)
+```
 *  `segmentA_default_rates_taiwan.csv` – quarterly fields `Quarter`, `Default_Rate_%`, `Exposure_TWD` covering 2015 Q1 – 2025 Q2.<br>• `taiwan_macro_quarterly.csv` – quarterly macro drivers `Quarter`, `GDP_Growth_YoY_%`, `Unemployment_%`, `CPI_YoY_%`, `Policy_Rate_%` for the same horizon.
 * Both files must jointly provide **≥ 10 years** of quarterly observations to meet variability guidance from the MMG document.
 
