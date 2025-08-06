@@ -1,100 +1,185 @@
 import pytest
 import pandas as pd
-from pytest_mock import MockerFixture
-import os
+import numpy as np
+from unittest.mock import MagicMock, patch
 
-# definition_85331be5a37742aba2df4039d392f3ed block
-from definition_85331be5a37742aba2df4039d392f3ed import load_datasets
-# End definition_85331be5a37742aba2df4039d392f3ed block
+# Keep a placeholder definition_2e30b571d196476bbcc2b012e8cd2d3f for the import of the module.
+# Keep the `your_module` block as it is. DO NOT REPLACE or REMOVE the block.
+from definition_2e30b571d196476bbcc2b012e8cd2d3f import train_arimax
 
-@pytest.fixture
-def mock_pd_data() -> pd.DataFrame:
-    """Returns a simple DataFrame for Probability of Default (PD) data."""
-    return pd.DataFrame({'date': pd.to_datetime(['2023-01-01', '2023-04-01']), 'pd_value': [0.01, 0.015]})
+# --- Mocking statsmodels components ---
 
-@pytest.fixture
-def mock_macro_data() -> pd.DataFrame:
-    """Returns a simple DataFrame for Macroeconomic data."""
-    return pd.DataFrame({'date': pd.to_datetime(['2023-01-01', '2023-04-01']), 'gdp': [1.0, 1.2], 'cpi': [2.0, 2.1]})
+# Mock the ARIMAXResultsWrapper for the fitted model output
+class MockARIMAXResultsWrapper:
+    def __init__(self):
+        self.aic = 100.0
+        self.bic = 120.0
+        self.summary = MagicMock(return_value="Mock Model Summary")
+        # Generate some dummy residuals for the Ljung-Box test
+        self.resid = pd.Series(np.random.randn(30), index=pd.date_range(start='2020-01-01', periods=30, freq='QS'))
 
-@pytest.mark.parametrize(
-    "pd_filepath, macro_filepath, expected_exception, mock_scenario",
-    [
-        # Test Case 1: Successful loading of two valid CSV files
-        ("data/pd_loans.csv", "data/macro_factors.csv", None, "success_csv"),
-        # Test Case 2: Successful loading of two valid Parquet files
-        ("data/pd_loans.parquet", "data/macro_factors.parquet", None, "success_parquet"),
-        # Test Case 3: FileNotFoundError when one or both files do not exist
-        ("non_existent_pd.csv", "non_existent_macro.csv", FileNotFoundError, "file_not_found"),
-        # Test Case 4: ValueError for an invalid or malformed data file (e.g., empty CSV)
-        # Assumes the function, when implemented, handles or re-raises pandas' read errors as ValueError
-        ("empty_pd.csv", "data/macro_factors.csv", ValueError, "malformed_pd_csv"),
-        # Test Case 5: TypeError for invalid input types (e.g., non-string file paths)
-        (123, "data/macro_factors.csv", TypeError, "invalid_type"),
-    ]
-)
-def test_load_datasets(
-    mocker: MockerFixture,
-    mock_pd_data: pd.DataFrame,
-    mock_macro_data: pd.DataFrame,
-    pd_filepath: str,
-    macro_filepath: str,
-    expected_exception: type,
-    mock_scenario: str
-):
+# Mock the ARIMAX class from statsmodels.tsa.arima.model
+class MockARIMAX:
+    def __init__(self, endog, exog, order, **kwargs):
+        self.endog = endog
+        self.exog = exog
+        self.order = order
+
+        # Simulate basic statsmodels input validation
+        if not isinstance(order, tuple) or len(order) != 3 or not all(isinstance(i, int) and i >= 0 for i in order):
+            raise ValueError("ARIMAX order must be a 3-tuple of non-negative integers (p, d, q).")
+        if not isinstance(endog, pd.Series) or endog.empty:
+             raise ValueError("endog must be a non-empty pandas Series.")
+        if exog is not None and (not isinstance(exog, pd.DataFrame) or exog.empty):
+             raise ValueError("exog must be a non-empty pandas DataFrame or None.")
+        # Minimal check for sufficient data points relative to order
+        if len(endog) < max(order) + 1:
+            raise ValueError(f"Not enough observations ({len(endog)}) for the specified ARIMAX order {order}.")
+
+    def fit(self):
+        # Simulate successful fitting
+        return MockARIMAXResultsWrapper()
+
+# Mock statsmodels.graphics.tsaplots.plot_acf and plot_pacf to prevent actual plotting during tests
+def mock_plot_func(*args, **kwargs):
+    pass
+
+# Mock statsmodels.stats.diagnostic.acorr_ljungbox for the Ljung-Box test results
+# The `train_arimax` function is expected to take the output of this mock
+# and format it into the required diagnostic DataFrame.
+def mock_acorr_ljungbox(x, lags=None, boxpierce=False, model_df=0, period=None, return_df=True):
+    if not isinstance(x, pd.Series) or x.empty:
+        raise ValueError("Residuals series cannot be empty for Ljung-Box test.")
+    
+    _lags = lags if lags is not None else [1, 5, 10]
+    
+    # Simulate statsmodels.stats.diagnostic.acorr_ljungbox(..., return_df=True) output
+    # This typically returns a DataFrame with 'lb_stat' and 'lb_pvalue'
+    data = {
+        'lb_stat': np.random.rand(len(_lags)) * 10, # Dummy Ljung-Box statistic values
+        'lb_pvalue': np.random.rand(len(_lags)) * 0.5 + 0.5 # Dummy p-values (simulating white noise)
+    }
+    df_result = pd.DataFrame(data, index=pd.Index(_lags, name='Lags'))
+    return df_result
+
+# Helper function to create dummy dataframes for tests
+def create_dummy_df(rows=30, target_col='target', exog_cols=['exog1', 'exog2']):
+    dates = pd.date_range(start='2020-01-01', periods=rows, freq='QS')
+    df = pd.DataFrame(np.random.rand(rows, len(exog_cols) + 1), columns=[target_col] + exog_cols, index=dates)
+    df.index.name = 'Quarter'
+    return df
+
+# --- Test Cases ---
+
+@patch('statsmodels.tsa.arima.model.ARIMAX', new=MockARIMAX)
+@patch('statsmodels.graphics.tsaplots.plot_acf', new=mock_plot_func)
+@patch('statsmodels.graphics.tsaplots.plot_pacf', new=mock_plot_func)
+@patch('statsmodels.stats.diagnostic.acorr_ljungbox', new=mock_acorr_ljungbox)
+def test_train_arimax_success():
     """
-    Tests the load_datasets function for various scenarios including successful loads,
-    file not found, invalid file content, and incorrect input types.
+    Test Case 1: Verifies successful model training and diagnostic results generation
+    with valid inputs (standard expected functionality).
     """
-    # Mock os.path.exists to control file existence behavior
-    mock_os_path_exists = mocker.patch('os.path.exists')
-    if mock_scenario == "file_not_found":
-        mock_os_path_exists.return_value = False
-    else:
-        mock_os_path_exists.return_value = True
+    df = create_dummy_df()
+    target_col = 'target'
+    exog_cols = ['exog1', 'exog2']
+    order = (1, 1, 1)
 
-    # Mock pandas read functions to control their return values or raised exceptions
-    mock_read_csv = mocker.patch('pandas.read_csv')
-    mock_read_parquet = mocker.patch('pandas.read_parquet')
+    fitted_model, diagnostic_results = train_arimax(df, target_col, exog_cols, order)
 
-    if mock_scenario == "success_csv":
-        # Simulate pd.read_csv returning mock data for both files
-        mock_read_csv.side_effect = [mock_pd_data, mock_macro_data]
-        # Ensure pd.read_parquet is not called in this scenario
-        mock_read_parquet.side_effect = NotImplementedError("Should not call parquet for CSV scenario")
-    elif mock_scenario == "success_parquet":
-        # Simulate pd.read_parquet returning mock data for both files
-        mock_read_parquet.side_effect = [mock_pd_data, mock_macro_data]
-        # Ensure pd.read_csv is not called in this scenario
-        mock_read_csv.side_effect = NotImplementedError("Should not call csv for Parquet scenario")
-    elif mock_scenario == "malformed_pd_csv":
-        # Simulate pd.read_csv raising an EmptyDataError (a subclass of ValueError) for the first file
-        # and returning valid data for the second file.
-        mock_read_csv.side_effect = [pd.errors.EmptyDataError("Simulated empty or malformed CSV"), mock_macro_data]
-        mock_read_parquet.side_effect = NotImplementedError("Should not call parquet in this scenario")
-    elif mock_scenario == "invalid_type":
-        # For invalid type tests, file reading functions should ideally not be called
-        mock_read_csv.side_effect = NotImplementedError("Should not be called for invalid type scenario")
-        mock_read_parquet.side_effect = NotImplementedError("Should not be called for invalid type scenario")
+    # Assert the type and expected attributes of the fitted model
+    assert isinstance(fitted_model, MockARIMAXResultsWrapper)
+    assert fitted_model.aic == 100.0
+    assert fitted_model.bic == 120.0
+    assert fitted_model.summary.called # Ensure summary was accessed
 
-    if expected_exception:
-        # Assert that the expected exception is raised
-        with pytest.raises(expected_exception):
-            load_datasets(pd_filepath, macro_filepath)
-    else:
-        # Call the function and assert its return values for successful scenarios
-        pd_df, macro_df = load_datasets(pd_filepath, macro_filepath)
-        pd.testing.assert_frame_equal(pd_df, mock_pd_data)
-        pd.testing.assert_frame_equal(macro_df, mock_macro_data)
+    # Assert the diagnostic results DataFrame structure and content
+    assert isinstance(diagnostic_results, pd.DataFrame)
+    assert not diagnostic_results.empty
+    assert 'P-value' in diagnostic_results.columns # As per notebook spec
+    assert 'Ljung-Box Statistic' in diagnostic_results.columns # As per notebook spec
+    assert 'Lag' == diagnostic_results.index.name # Assuming 'Lag' is the index name
 
-        # Verify that the correct pandas read function was called the correct number of times
-        if mock_scenario == "success_csv":
-            assert mock_read_csv.call_count == 2
-            mock_read_csv.assert_any_call(pd_filepath)
-            mock_read_csv.assert_any_call(macro_filepath)
-            mock_read_parquet.assert_not_called()
-        elif mock_scenario == "success_parquet":
-            assert mock_read_parquet.call_count == 2
-            mock_read_parquet.assert_any_call(pd_filepath)
-            mock_read_parquet.assert_any_call(macro_filepath)
-            mock_read_csv.assert_not_called()
+
+@patch('statsmodels.tsa.arima.model.ARIMAX', new=MockARIMAX)
+@patch('statsmodels.graphics.tsaplots.plot_acf', new=mock_plot_func)
+@patch('statsmodels.graphics.tsaplots.plot_pacf', new=mock_plot_func)
+@patch('statsmodels.stats.diagnostic.acorr_ljungbox', new=mock_acorr_ljungbox)
+def test_train_arimax_empty_dataframe():
+    """
+    Test Case 2: Checks handling when an empty input DataFrame is provided.
+    Expects a ValueError from the mocked ARIMAX constructor due to empty endog.
+    """
+    df = pd.DataFrame(index=pd.date_range(start='2020-01-01', periods=0, freq='QS')) # Empty DataFrame
+    target_col = 'target'
+    exog_cols = ['exog1']
+    order = (1, 0, 0)
+
+    with pytest.raises(ValueError, match="endog must be a non-empty pandas Series."):
+        train_arimax(df, target_col, exog_cols, order)
+
+
+@patch('statsmodels.tsa.arima.model.ARIMAX', new=MockARIMAX)
+@patch('statsmodels.graphics.tsaplots.plot_acf', new=mock_plot_func)
+@patch('statsmodels.graphics.tsaplots.plot_pacf', new=mock_plot_func)
+@patch('statsmodels.stats.diagnostic.acorr_ljungbox', new=mock_acorr_ljungbox)
+def test_train_arimax_missing_target_column():
+    """
+    Test Case 3: Verifies handling when the specified target column is not found in the DataFrame.
+    Expects a KeyError from pandas column selection.
+    """
+    df = create_dummy_df(target_col='actual_target') # DataFrame has 'actual_target'
+    target_col = 'non_existent_target' # Requesting a missing column
+    exog_cols = ['exog1']
+    order = (1, 0, 0)
+
+    with pytest.raises(KeyError, match=f"'{target_col}'"):
+        train_arimax(df, target_col, exog_cols, order)
+
+
+@patch('statsmodels.tsa.arima.model.ARIMAX', new=MockARIMAX)
+@patch('statsmodels.graphics.tsaplots.plot_acf', new=mock_plot_func)
+@patch('statsmodels.graphics.tsaplots.plot_pacf', new=mock_plot_func)
+@patch('statsmodels.stats.diagnostic.acorr_ljungbox', new=mock_acorr_ljungbox)
+def test_train_arimax_missing_exogenous_column():
+    """
+    Test Case 4: Verifies handling when one or more specified exogenous columns are not found in the DataFrame.
+    Expects a KeyError from pandas column selection.
+    """
+    df = create_dummy_df(exog_cols=['exog_present']) # DataFrame has 'exog_present'
+    target_col = 'target'
+    exog_cols = ['exog_present', 'non_existent_exog'] # Requesting a missing column
+    order = (1, 0, 0)
+
+    with pytest.raises(KeyError, match=f"['non_existent_exog']"): # Pandas KeyError for list of columns
+        train_arimax(df, target_col, exog_cols, order)
+
+
+@patch('statsmodels.tsa.arima.model.ARIMAX', new=MockARIMAX)
+@patch('statsmodels.graphics.tsaplots.plot_acf', new=mock_plot_func)
+@patch('statsmodels.graphics.tsaplots.plot_pacf', new=mock_plot_func)
+@patch('statsmodels.stats.diagnostic.acorr_ljungbox', new=mock_acorr_ljungbox)
+def test_train_arimax_invalid_order_format():
+    """
+    Test Case 5: Checks handling of an invalid `order` parameter (e.g., wrong type, wrong length, non-integers).
+    Expects a ValueError from the mocked ARIMAX constructor's input validation.
+    """
+    df = create_dummy_df()
+    target_col = 'target'
+    exog_cols = ['exog1']
+
+    # Test with non-tuple order
+    with pytest.raises(ValueError, match="ARIMAX order must be a 3-tuple of non-negative integers"):
+        train_arimax(df, target_col, exog_cols, "invalid_order")
+
+    # Test with tuple of wrong length
+    with pytest.raises(ValueError, match="ARIMAX order must be a 3-tuple of non-negative integers"):
+        train_arimax(df, target_col, exog_cols, (1, 2)) # Length 2
+
+    # Test with non-integer elements in tuple
+    with pytest.raises(ValueError, match="ARIMAX order must be a 3-tuple of non-negative integers"):
+        train_arimax(df, target_col, exog_cols, (1, 'a', 3)) # 'a' is not int
+
+    # Test with negative integers (statsmodels requires non-negative for p, d, q)
+    with pytest.raises(ValueError, match="ARIMAX order must be a 3-tuple of non-negative integers"):
+        train_arimax(df, target_col, exog_cols, (-1, 0, 0)) # -1 is not non-negative
