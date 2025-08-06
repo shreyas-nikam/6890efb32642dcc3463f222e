@@ -150,7 +150,21 @@ The notebook will conceptually follow these steps (without writing Python code d
     *   Description of `Segment A default-rate` as the target variable and selected macro drivers (`GDP_Growth_YoY_%`, `Unemployment_%`) as exogenous variables.
     *   Instruction to load the provided quarterly dataset.
 *   **Code Sections**:
-* python<br># STEP 0 – data acquisition / load\nimport pandas as pd\ncr_path = 'data/segmentA_default_rates_taiwan.csv'\nmac_path = 'data/taiwan_macro_quarterly.csv'\ncr = pd.read_csv(cr_path, parse_dates=['Quarter'])\nmac = pd.read_csv(mac_path, parse_dates=['Quarter'])\nraw_df = (cr.merge(mac, on='Quarter', how='inner')\n .sort_values('Quarter')\n .set_index('Quarter'))\nraw_df.head()\n
+users won't be uploading the .csv file so here are the steps to load the dataset:
+* steps to load the data:
+```python 
+pip install ucimlrepo
+from ucimlrepo import fetch_ucirepo
+# fetch dataset
+default_of_credit_card_clients = fetch_ucirepo(id=350)
+# data (as pandas dataframes)
+X = default_of_credit_card_clients.data.features
+y = default_of_credit_card_clients.data.targets
+# metadata
+print(default_of_credit_card_clients.metadata)
+# variable information
+print(default_of_credit_card_clients.variables)
+```
 
     *   Load the dataset into a pandas DataFrame.
     *   Display the head of the DataFrame and its info/describe to understand structure and data types.
