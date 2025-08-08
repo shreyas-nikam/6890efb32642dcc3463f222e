@@ -1,14 +1,10 @@
-
 import streamlit as st
-st.set_page_config(page_title="QuLab", layout="wide")
+st.set_page_config(page_title="QuLab: Macro-Economic Models - Development", layout="wide")
 st.sidebar.image("https://www.quantuniversity.com/assets/img/logo5.jpg")
 st.sidebar.divider()
-st.title("QuLab")
+st.title("QuLab: Macro-Economic Models - Development")
 st.divider()
-st.markdown("""
-In this lab, we will explore macro-economic models and their application to credit risk forecasting. We will use a synthetic dataset to estimate and diagnose an ARIMAX model for Segment A default rates, incorporating key macroeconomic variables.
-formulae, explanations, tables, etc.
-""")
+
 # Your code starts here
 page = st.sidebar.selectbox(label="Navigation", options=["Data Loading & Exploration", "Data Pre-processing (Stationarity)", "ARIMAX Model Estimation & Diagnostics", "Model Persistence"])
 if page == "Data Loading & Exploration":

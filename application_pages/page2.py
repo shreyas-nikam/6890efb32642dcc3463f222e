@@ -1,43 +1,49 @@
-
 import streamlit as st
 import pandas as pd
-import statsmodels.stats.diagnostic as smd
+from statsmodels.tsa.stattools import adfuller, kpss
+from statsmodels.tsa.stattools import adfuller
+import numpy as np
+import warnings
 
 def run_page2():
     st.header("2. Data Pre-processing for Stationarity")
-    st.markdown("This section defines a helper function for unit root tests and applies differencing to the target variable to achieve stationarity, then verifies it.")
+    st.markdown(r"""
+    This step prepares the data for ARIMAX by checking **stationarity** and applying minimal transformations.
+
+    You will:
+    - Run **ADF** and **KPSS** on the original series.
+    - Difference the default rate and re-test.
+    - Store the transformed dataset for modeling on the next page.
+
+    How to read the tests:
+    - **ADF** p ≤ 0.05 → stationary | p > 0.05 → non-stationary.
+    - **KPSS** p ≤ 0.05 → non-stationary |  p > 0.05 → stationary. 
+    - Use both to decide if differencing is needed.
+    """)
 
     def run_unit_root_tests(series, name):
         """
         Performs Augmented Dickey-Fuller (ADF) and Kwiatkowski-Phillips-Schmidt-Shin (KPSS) tests
         for stationarity on a given time series.
         """
-        st.write(f"\n--- Unit Root Tests for: **{name}** ---")
+        adf_result = adfuller(series.dropna(), autolag='AIC')
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            kpss_result = kpss(series.dropna(), regression='c', nlags='auto')
 
-        # ADF Test
-        # Null Hypothesis ($H_0$): The series has a unit root (non-stationary).
-        # If p-value <= 0.05, reject $H_0$ (series is stationary).
-        adf_result = smd.adfuller(series.dropna(), autolag='AIC')
-        st.write("Augmented Dickey-Fuller Test:")
-        st.write(f"  ADF Statistic: {adf_result[0]:.4f}")
-        st.write(f"  P-value: {adf_result[1]:.4f}")
-        st.write(f"  Critical Values (1%, 5%, 10%): {adf_result[4]}")
-        st.write(f"  Result: {'**Stationary**' if adf_result[1] <= 0.05 else '**Non-Stationary**'} (based on ADF)")
+        results_df = pd.DataFrame({
+            "Test": ["ADF", "KPSS"],
+            "Statistic": [round(adf_result[0], 4), round(kpss_result[0], 4)],
+            "P-value": [round(adf_result[1], 4), round(kpss_result[1], 4)],
+            "Stationary?": [
+                "Yes" if adf_result[1] <= 0.05 else "No",
+                "Yes" if kpss_result[1] > 0.05 else "No"
+            ]
+        })
 
-        # KPSS Test
-        # Null Hypothesis ($H_0$): The series is stationary around a deterministic trend (trend-stationary).
-        # If p-value <= 0.05, reject $H_0$ (series is non-stationary).
-        try:
-            kpss_result = smd.kpss(series.dropna(), regression='c', nlags='auto')
-            st.write("\nKPSS Test:")
-            st.write(f"  KPSS Statistic: {kpss_result[0]:.4f}")
-            st.write(f"  P-value: {kpss_result[1]:.4f}")
-            st.write(f"  Critical Values (10%, 5%, 2.5%, 1%): {kpss_result[3]}")
-            st.write(f"  Result: {'**Non-Stationary**' if kpss_result[1] <= 0.05 else '**Stationary**'} (based on KPSS)")
-        except Exception as e:
-            st.error(f"\nKPSS Test failed: {e}")
-        
-        return adf_result, kpss_result if 'kpss_result' in locals() else None
+        st.subheader(f"Unit Root Tests for: {name}")
+        st.dataframe(results_df)
+        return adf_result, kpss_result
 
     st.subheader("Transformations for Stationarity:")
     st.markdown(r"""
@@ -68,27 +74,39 @@ def run_page2():
         df_synthetic = pd.DataFrame({
             'Quarter': quarters,
             'Segment A Default Rate': default_rate,
-            'GDP_Growth_YoY_%': gdp_growth,
-            'Unemployment_%': unemployment
+            'GDP_Growth_YoY(%)': gdp_growth,
+            'Unemployment(%)': unemployment
         })
         df_synthetic.set_index('Quarter', inplace=True)
         df_synthetic.index.freq = 'QS-JAN'
 
-        st.subheader("Testing stationarity of original time series:")
-        run_unit_root_tests(df_synthetic['Segment A Default Rate'], 'Segment A Default Rate')
-        run_unit_root_tests(df_synthetic['GDP_Growth_YoY_%'], 'GDP_Growth_YoY_%')
-        run_unit_root_tests(df_synthetic['Unemployment_%'], 'Unemployment_%')
-
         df_transformed = df_synthetic.copy()
         df_transformed['Default_Rate_Diff'] = df_transformed['Segment A Default Rate'].diff(1)
+        df_transformed['Unemployment_Diff'] = df_transformed['Unemployment(%)'].diff(1)
         df_transformed = df_transformed.drop(columns=['Segment A Default Rate'])
         df_transformed = df_transformed.dropna()
         df_transformed.index = pd.to_datetime(df_transformed.index)
         df_transformed.index.freq = 'QS-JAN'
+        st.markdown("""
+        Below are the stationarity test results for each variable before (left) and after (right) transformation. The transformation’s goal is to make each series suitable for ARIMAX by achieving stationarity. A series is considered ready if **ADF** shows p ≤ 0.05 and **KPSS** shows p > 0.05.
+        """)
 
-        st.subheader("Testing stationarity of transformed time series:")
-        run_unit_root_tests(df_transformed['Default_Rate_Diff'], 'Default_Rate_Diff')
-        run_unit_root_tests(df_transformed['GDP_Growth_YoY_%'], 'GDP_Growth_YoY_% (Transformed)')
+        col1, col2 = st.columns(2)
+
+        
+        with col1:
+            st.subheader("Original time series:")
+            st.divider()
+            run_unit_root_tests(df_synthetic['Segment A Default Rate'], 'Segment A Default Rate')
+            run_unit_root_tests(df_synthetic['GDP_Growth_YoY(%)'], 'GDP_Growth_YoY(%)')
+            run_unit_root_tests(df_synthetic['Unemployment(%)'], 'Unemployment(%)')
+
+        with col2:
+            st.subheader("Transformed time series:")
+            st.divider()
+            run_unit_root_tests(df_transformed['Default_Rate_Diff'], 'Default_Rate_Diff')
+            run_unit_root_tests(df_transformed['GDP_Growth_YoY(%)'], 'GDP_Growth_YoY(%) ')
+            run_unit_root_tests(df_transformed['Unemployment_Diff'].dropna(), 'Unemployment(%)')
 
         st.session_state['df_transformed'] = df_transformed  # Store for next step
 

@@ -1,0 +1,487 @@
+
+<!doctype html>
+
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta name="theme-color" content="#4F7DC9">
+  <meta charset="UTF-8">
+  <title>Building a Macro-Economic Credit Risk Forecasting Application with Streamlit and ARIMAX</title>
+  <script src="../../bower_components/webcomponentsjs/webcomponents-lite.js"></script>
+  <link rel="import" href="../../elements/codelab.html">
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Source+Code+Pro:400|Roboto:400,300,400italic,500,700|Roboto+Mono">
+  <style is="custom-style">
+    body {
+      font-family: "Roboto",sans-serif;
+      background: var(--google-codelab-background, --paper-grey-300);
+    }
+  </style>
+  
+</head>
+<body unresolved class="fullbleed">
+
+  <google-codelab title="Building a Macro-Economic Credit Risk Forecasting Application with Streamlit and ARIMAX"
+                  environment="web"
+                  feedback-link="">
+    
+      <google-codelab-step label="Introduction to QuLab: Macro-Economic Models for Credit Risk Forecasting" duration="300">
+          Welcome to this codelab! In this session, you will learn how to build and understand a Streamlit application focused on applying macro-economic models for credit risk forecasting. This application, named “QuLab,” uses a synthetic dataset to illustrate the process of estimating and diagnosing an ARIMAX (Autoregressive Integrated Moving Average with eXogenous inputs) model for predicting segment default rates, integrating key macroeconomic variables.  Understanding and forecasting credit risk is paramount in financial institutions. Traditional credit risk models often rely on internal factors, but macro-economic conditions (like GDP growth and unemployment rates) play a crucial role, especially during economic downturns. This codelab will guide you through the process of:  <ul>
+<li>strong</li>
+<li>strong</li>
+<li>strong</li>
+<li>strong</li>
+<li>strong</li>
+</ul>
+  By the end of this codelab, you will have a comprehensive understanding of how to develop an interactive Streamlit application for macro-economic credit risk modeling, equipped with the knowledge of underlying statistical concepts and best practices.   Why is this important? This application demonstrates a practical approach to integrating macroeconomic data into credit risk models, making forecasts more resilient and insightful, especially in volatile economic environments. The use of Streamlit allows for rapid prototyping and deployment of interactive data science applications.   <h3>Application Architecture Overview</h3>
+  The QuLab application is structured into a main <code>app.py</code> file which acts as a navigator, routing to different functionalities implemented in separate Python files within the <code>application_pages</code> directory. This modular design promotes maintainability and scalability.  Here’s a high-level overview of the application’s structure:  <pre><code>├── app.py
+└── application_pages/
+    ├── __init__.py
+    ├── page1.py
+    ├── page2.py
+    ├── page3.py
+    └── page4.py
+</code></pre>
+  <ul>
+<li>code</li>
+<li>code</li>
+<li>code</li>
+<li>code</li>
+<li>code</li>
+</ul>
+  <h3>Getting Started</h3>
+  To run this application locally, you will need Python installed (preferably Python 3.8+).  <ol start="1">
+<li>p</li>
+<li>p</li>
+<li>p</li>
+<li>p</li>
+</ol>
+  
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Data Loading and Initial Exploration" duration="420">
+          This step focuses on generating and understanding the synthetic dataset used throughout the application. The <code>application_pages/page1.py</code> script is responsible for this, providing an interactive way to view raw data, its statistical summary, and visual trends.  <h3>Synthetic Data Generation</h3>
+  The application uses a synthetic dataset to mimic real-world Taiwan credit risk and macroeconomic data. This allows for reproducible demonstrations without relying on sensitive financial data. The data includes:  <ul>
+<li>strong</li>
+<li>strong</li>
+<li>strong</li>
+</ul>
+  The data generation process ensures that the time series exhibit characteristics typical of economic data, such as trends, seasonality, and responses to economic events.  Let’s look at the relevant code snippet from <code>application_pages/page1.py</code>:  <pre><code language="python" class="python">import streamlit as st
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+def run_page1():
+    st.header(&#34;1. Data Loading and Initial Exploration&#34;)
+    st.markdown(&#34;This section loads synthetic time series data mimicking Taiwan credit risk and macroeconomic data. It displays initial data insights and visualizations.&#34;)
+
+    RANDOM_SEED = 42
+    start_date = &#39;2015-01-01&#39;
+    quarters = pd.date_range(start=start_date, periods=40, freq=&#39;QS-JAN&#39;)
+
+    np.random.seed(RANDOM_SEED)
+    default_rate = 1.5 + 0.05 * np.arange(len(quarters)) + np.random.normal(0, 0.2, len(quarters))
+    recession_start = 20
+    recession_end = 24
+    default_rate[recession_start:recession_end] += np.random.normal(1.0, 0.3, recession_end - recession_start)
+
+    gdp_growth = 2.5 + 1.0 * np.sin(np.arange(len(quarters)) * 2 * np.pi / 8) + np.random.normal(0, 0.5, len(quarters))
+    gdp_growth[recession_start:recession_end] = np.random.normal(-2.0, 1.0, recession_end - recession_start)
+
+    unemployment = 5.0 - 0.5 * gdp_growth + np.random.normal(0, 0.3, len(quarters))
+    unemployment = np.clip(unemployment, 2.0, 12.0)
+
+    df_synthetic = pd.DataFrame({
+        &#39;Quarter&#39;: quarters,
+        &#39;Segment A Default Rate&#39;: default_rate,
+        &#39;GDP_Growth_YoY_%&#39;: gdp_growth,
+        &#39;Unemployment_%&#39;: unemployment
+    })
+    df_synthetic.set_index(&#39;Quarter&#39;, inplace=True)
+    df_synthetic.index.freq = &#39;QS-JAN&#39;
+
+    st.subheader(&#34;Synthetic Dataset Overview:&#34;)
+    st.dataframe(df_synthetic.head())
+    st.write(f&#34;Dataset shape: {df_synthetic.shape}&#34;)
+    st.write(&#34;Basic statistics:&#34;)
+    st.dataframe(df_synthetic.describe())
+
+    # Visualization of synthetic time series data
+    fig, axes = plt.subplots(3, 1, figsize=(14, 12))
+    axes[0].plot(df_synthetic.index, df_synthetic[&#39;Segment A Default Rate&#39;], linewidth=2, color=&#39;red&#39;, label=&#39;Segment A Default Rate&#39;)
+    axes[0].set_title(&#39;Segment A Default Rate Over Time&#39;, fontsize=14, fontweight=&#39;bold&#39;)
+    axes[0].set_ylabel(&#39;Default Rate (%)&#39;)
+    axes[0].grid(True, alpha=0.3)
+    axes[0].legend()
+
+    axes[1].plot(df_synthetic.index, df_synthetic[&#39;GDP_Growth_YoY_%&#39;], linewidth=2, color=&#39;blue&#39;, label=&#39;GDP Growth YoY%&#39;)
+    axes[1].axhline(y=0, color=&#39;black&#39;, linestyle=&#39;--&#39;, alpha=0.5)
+    axes[1].set_title(&#39;GDP Growth Year-over-Year (%)&#39;, fontsize=14, fontweight=&#39;bold&#39;)
+    axes[1].set_ylabel(&#39;GDP Growth (%)&#39;)
+    axes[1].grid(True, alpha=0.3)
+    axes[1].legend()
+
+    ax3 = axes[2]
+    ax3_twin = ax3.twinx()
+    line1 = ax3.plot(df_synthetic.index, df_synthetic[&#39;Segment A Default Rate&#39;], linewidth=2, color=&#39;red&#39;, label=&#39;Default Rate&#39;)
+    line2 = ax3_twin.plot(df_synthetic.index, df_synthetic[&#39;GDP_Growth_YoY_%&#39;], linewidth=2, color=&#39;blue&#39;, label=&#39;GDP Growth&#39;)
+    ax3.set_title(&#39;Default Rate vs GDP Growth Over Time&#39;, fontsize=14, fontweight=&#39;bold&#39;)
+    ax3.set_ylabel(&#39;Default Rate (%)&#39;, color=&#39;red&#39;)
+    ax3_twin.set_ylabel(&#39;GDP Growth (%)&#39;, color=&#39;blue&#39;)
+    ax3.set_xlabel(&#39;Quarter&#39;)
+    ax3.grid(True, alpha=0.3)
+    lines1, labels1 = ax3.get_legend_handles_labels()
+    lines2, labels2 = ax3_twin.get_legend_handles_labels()
+    ax3.legend(lines1 + lines2, labels1 + labels2, loc=&#39;upper left&#39;)
+
+    plt.tight_layout()
+    st.pyplot(fig)
+    plt.close(fig)
+</code></pre>
+  <h3>Key Takeaways from Page 1</h3>
+  When you navigate to “Data Loading &amp; Exploration” in the Streamlit app, you will see:  <ul>
+<li>strong</li>
+<li>strong</li>
+<li>strong</li>
+<li>Separate plots for ‘Segment A Default Rate’ and ‘GDP Growth YoY%’ showing their evolution over time. Observe the trends and the impact of the simulated recession.</li>
+<li>A combined plot of ‘Default Rate vs GDP Growth Over Time’ using a twin y-axis. This visualization is crucial for visually identifying potential relationships between the target variable and an exogenous variable. You should observe an inverse relationship during the recessionary period.</li>
+</ul>
+    Tip: Always start with thorough data exploration. Visualizations help in identifying trends, seasonality, outliers, and potential relationships between variables, which are crucial for subsequent modeling decisions.   
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Data Pre-processing for Stationarity" duration="600">
+          Stationarity is a fundamental concept in time series analysis. A stationary time series is one whose statistical properties (mean, variance, autocorrelation) do not change over time. Many time series models, including ARIMAX, assume that the underlying process generating the data is stationary. Non-stationary series can lead to spurious regressions and unreliable forecasts.  This step, handled by <code>application_pages/page2.py</code>, demonstrates how to test for stationarity and apply transformations (differencing) to achieve it.  <h3>Understanding Stationarity and Unit Root Tests</h3>
+  The application uses two common unit root tests to assess stationarity:  <ol start="1">
+<li>p</li>
+<li>strong</li>
+<li>strong</li>
+<li>strong</li>
+</ol>
+  <strong>Kwiatkowski-Phillips-Schmidt-Shin (KPSS) Test</strong>:  <ul>
+<li>strong</li>
+<li>strong</li>
+<li>strong</li>
+</ul>
+    Important Note: ADF and KPSS tests have opposite null hypotheses. If both tests suggest stationarity (ADF rejects $H_0$, KPSS fails to reject $H_0$), you can be reasonably confident. If both suggest non-stationarity, it&#39;s clear. If they conflict, further investigation or transformations might be needed.   <h3>Transformations for Stationarity</h3>
+  A common technique to achieve stationarity is <strong>differencing</strong>. This involves subtracting the previous observation from the current observation. For quarterly data, year-over-year differencing (lag 4) might also be considered for seasonality, but for this specific example, a simple first-order differencing is applied to the target variable.  <ul>
+<li>strong</li>
+</ul>
+  Let’s examine the code from <code>application_pages/page2.py</code>:  <pre><code language="python" class="python">import streamlit as st
+import pandas as pd
+import statsmodels.stats.diagnostic as smd # For adfuller and kpss
+
+def run_page2():
+    st.header(&#34;2. Data Pre-processing for Stationarity&#34;)
+    st.markdown(&#34;This section defines a helper function for unit root tests and applies differencing to the target variable to achieve stationarity, then verifies it.&#34;)
+
+    def run_unit_root_tests(series, name):
+        &#34;&#34;&#34;
+        Performs Augmented Dickey-Fuller (ADF) and Kwiatkowski-Phillips-Schmidt-Shin (KPSS) tests
+        for stationarity on a given time series.
+        &#34;&#34;&#34;
+        st.write(f&#34;\n Unit Root Tests for: **{name}** &#34;)
+
+        # ADF Test
+        # Null Hypothesis ($H_0$): The series has a unit root (non-stationary).
+        # If p-value &lt;= 0.05, reject $H_0$ (series is stationary).
+        adf_result = smd.adfuller(series.dropna(), autolag=&#39;AIC&#39;)
+        st.write(&#34;Augmented Dickey-Fuller Test:&#34;)
+        st.write(f&#34;  ADF Statistic: {adf_result[0]:.4f}&#34;)
+        st.write(f&#34;  P-value: {adf_result[1]:.4f}&#34;)
+        st.write(f&#34;  Critical Values (1%, 5%, 10%): {adf_result[4]}&#34;)
+        st.write(f&#34;  Result: {&#39;**Stationary**&#39; if adf_result[1] &lt;= 0.05 else &#39;**Non-Stationary**&#39;} (based on ADF)&#34;)
+
+        # KPSS Test
+        # Null Hypothesis ($H_0$): The series is stationary around a deterministic trend (trend-stationary).
+        # If p-value &lt;= 0.05, reject $H_0$ (series is non-stationary).
+        try:
+            kpss_result = smd.kpss(series.dropna(), regression=&#39;c&#39;, nlags=&#39;auto&#39;)
+            st.write(&#34;\nKPSS Test:&#34;)
+            st.write(f&#34;  KPSS Statistic: {kpss_result[0]:.4f}&#34;)
+            st.write(f&#34;  P-value: {kpss_result[1]:.4f}&#34;)
+            st.write(f&#34;  Critical Values (10%, 5%, 2.5%, 1%): {kpss_result[3]}&#34;)
+            st.write(f&#34;  Result: {&#39;**Non-Stationary**&#39; if kpss_result[1] &lt;= 0.05 else &#39;**Stationary**&#39;} (based on KPSS)&#34;)
+        except Exception as e:
+            st.error(f&#34;\nKPSS Test failed: {e}&#34;)
+        
+        return adf_result, kpss_result if &#39;kpss_result&#39; in locals() else None
+
+    # ... (Rest of the run_page2 function handling button click and data generation)
+    if st.button(&#34;Apply Transformations and Test Stationarity&#34;):
+        # Load the synthetic data (same as in page1.py)
+        # ... (data generation code from page1.py) ...
+
+        st.subheader(&#34;Testing stationarity of original time series:&#34;)
+        run_unit_root_tests(df_synthetic[&#39;Segment A Default Rate&#39;], &#39;Segment A Default Rate&#39;)
+        run_unit_root_tests(df_synthetic[&#39;GDP_Growth_YoY_%&#39;], &#39;GDP_Growth_YoY_%&#39;)
+        run_unit_root_tests(df_synthetic[&#39;Unemployment_%&#39;], &#39;Unemployment_%&#39;)
+
+        df_transformed = df_synthetic.copy()
+        df_transformed[&#39;Default_Rate_Diff&#39;] = df_transformed[&#39;Segment A Default Rate&#39;].diff(1)
+        df_transformed = df_transformed.drop(columns=[&#39;Segment A Default Rate&#39;])
+        df_transformed = df_transformed.dropna()
+        df_transformed.index = pd.to_datetime(df_transformed.index)
+        df_transformed.index.freq = &#39;QS-JAN&#39;
+
+        st.subheader(&#34;Testing stationarity of transformed time series:&#34;)
+        run_unit_root_tests(df_transformed[&#39;Default_Rate_Diff&#39;], &#39;Default_Rate_Diff&#39;)
+        run_unit_root_tests(df_transformed[&#39;GDP_Growth_YoY_%&#39;], &#39;GDP_Growth_YoY_% (Transformed)&#39;)
+
+        st.session_state[&#39;df_transformed&#39;] = df_transformed
+</code></pre>
+  <h3>Navigating Page 2</h3>
+  <ol start="1">
+<li>Navigate to “Data Pre-processing (Stationarity)” in the sidebar.</li>
+<li>Click the “Apply Transformations and Test Stationarity” button.</li>
+<li>Observe the output:  </li>
+<li>The results of ADF and KPSS tests for the original ‘Segment A Default Rate’, ‘GDP_Growth</li>
+<li>The </li>
+<li>The tests are run again on </li>
+</ol>
+ The <code>df_transformed</code> DataFrame is stored in <code>st.session_state</code> so it can be used in the next step (ARIMAX model estimation).   
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="ARIMAX Model Estimation and Diagnostics" duration="900">
+          This is the core of the application, implemented in <code>application_pages/page3.py</code>. It allows you to estimate an ARIMAX model and perform crucial diagnostic checks.  <h3>The ARIMAX Model</h3>
+  ARIMAX is an extension of the ARIMA model that includes the concept of “exogenous” (external) variables. It is particularly useful when the target time series is influenced by other independent time series.  The general form of an $ARIMAX(p,d,q)$ model with $m$ exogenous regressors can be expressed as: $$ (1 - \sum_{i=1}^{p} \phi_i L^i) (1 - L)^d Y<em>t = c + (1 + \sum</em>{j=1}^{q} \theta_j L^j) \epsilon<em>t + \sum</em>{k=1}^{m} \beta<em>k X</em>{k,t} $$ Where:  <ul>
+<li>$Y_t$: The target variable at time $t$.</li>
+<li>$L$: The lag operator, such that $L Y</li>
+<li>$p$: The order of the autoregressive (AR) part. This indicates the number of past observations of the target variable to include in the model.</li>
+<li>$\phi_i$: AR coefficients.</li>
+<li>$d$: The order of differencing (I for integrated part). This ensures stationarity.</li>
+<li>$q$: The order of the moving average (MA) part. This indicates the number of past error terms to include.</li>
+<li>$\theta_j$: MA coefficients.</li>
+<li>$c$: A constant term.</li>
+<li>$\epsilon_t$: The white noise error term (residuals) at time $t$. This is the part of $Y_t$ that the model cannot explain.</li>
+<li>$X_{k,t}$: The $k$-th exogenous variable at time $t$.</li>
+<li>$\beta_k$: The coefficients for the exogenous variables, indicating their impact on $Y_t$.</li>
+</ul>
+  <h3>Model Order Selection Criteria</h3>
+  Choosing the correct orders for $p$, $d$, and $q$ (and potentially seasonal orders) is crucial. Information criteria help in selecting the best model among several candidates:  <ul>
+<li>strong</li>
+<li>strong</li>
+</ul>
+  <h3>Residual Diagnostics (Ljung-Box Test)</h3>
+  After fitting a model, it’s essential to check its residuals (the difference between actual and predicted values). Ideally, residuals should be white noise, meaning they are independently and identically distributed with a mean of zero and constant variance. Any remaining patterns in the residuals indicate that the model has not fully captured the information in the data.  The <strong>Ljung-Box test</strong> is used to check for autocorrelation in the residuals. The Ljung-Box test statistic $Q$ is given by: $$ Q = n(n+2) \sum_{k=1}^{h} \frac{\hat{\rho}_k^2}{n-k} $$ Where: $n$ is the number of observations, $\hat{\rho}_k$ is the sample autocorrelation at lag $k$, and $h$ is the number of lags tested.  <ul>
+<li>strong</li>
+<li>strong</li>
+<li>strong</li>
+</ul>
+  <h3>Code Walkthrough for Page 3</h3>
+  Here’s an overview of the key functions in <code>application_pages/page3.py</code>:  <pre><code language="python" class="python">import streamlit as st
+import pandas as pd
+import statsmodels.tsa.api as smt # For plot_acf/pacf
+import statsmodels.stats.diagnostic as smd # For acorr_ljungbox
+import matplotlib.pyplot as plt
+from statsmodels.tsa.arima.model import ARIMA
+
+# Helper functions for validation, data preparation, fitting, and diagnostics
+def validate_arimax_inputs(df, target_col, exog_cols, order): # ...
+def prepare_arimax_data(df, target_col, exog_cols): # ...
+def fit_arimax_model(endog_series, exog_df, order): # ...
+def compute_residual_diagnostics(fitted_model): # ...
+def plot_residual_diagnostics(fitted_model, model_name=&#34;ARIMAX&#34;): # ...
+def interpret_ljung_box_results(ljung_box_results, significance_level=0.05): # ...
+
+def train_arimax(df, target_col, exog_cols, order):
+    &#34;&#34;&#34;Orchestrates the ARIMAX model training and diagnostics.&#34;&#34;&#34;
+    with st.spinner(f&#34;Training ARIMAX{order} Model...&#34;):
+        validate_arimax_inputs(df, target_col, exog_cols, order)
+        endog_series, exog_df = prepare_arimax_data(df, target_col, exog_cols)
+        fitted_model = fit_arimax_model(endog_series, exog_df, order)
+        ljung_box_results = compute_residual_diagnostics(fitted_model)
+    st.success(f&#34;ARIMAX{order} model training completed!&#34;)
+    return fitted_model, ljung_box_results
+
+def run_page3():
+    st.header(&#34;3. ARIMAX Model Estimation and Diagnostics&#34;)
+    st.markdown(&#34;This section allows users to specify and estimate an ARIMAX(p,d,q) model...&#34;)
+
+    st.subheader(&#34;ARIMAX Model Equation:&#34;)
+    # ... (equation and explanation) ...
+
+    st.subheader(&#34;Model Order Selection Criteria:&#34;)
+    # ... (AIC/BIC equations and explanation) ...
+
+    st.subheader(&#34;Residual Diagnostics (Ljung-Box Test):&#34;)
+    # ... (Ljung-Box equation and explanation) ...
+
+    target_column = &#39;Default_Rate_Diff&#39;
+    exogenous_columns = [&#39;GDP_Growth_YoY_%&#39;]
+
+    st.write(f&#34;**Target variable:** `{target_column}`&#34;)
+    st.write(f&#34;**Exogenous variables:** `{exogenous_columns}`&#34;)
+
+    p = st.number_input(&#34;Enter ARIMA Order (p):&#34;, min_value=0, value=1, key=&#39;p_input&#39;)
+    d = st.number_input(&#34;Enter ARIMA Order (d):&#34;, min_value=0, value=0, key=&#39;d_input&#39;)
+    q = st.number_input(&#34;Enter ARIMA Order (q):&#34;, min_value=0, value=0, key=&#39;q_input&#39;)
+    order = (p, d, q)
+
+    if &#39;df_transformed&#39; in st.session_state and st.button(&#34;Train Selected ARIMAX Model&#34;, key=&#39;train_button&#39;):
+        df_transformed = st.session_state[&#39;df_transformed&#39;]
+        try:
+            fitted_model, ljung_box_results = train_arimax(df_transformed, target_column, exogenous_columns, order)
+            st.session_state[&#39;fitted_model&#39;] = fitted_model
+            st.session_state[&#39;ljung_box_results&#39;] = ljung_box_results
+
+            st.subheader(f&#34;ARIMAX{order} Model Summary:&#34;)
+            st.code(fitted_model.summary().as_text())
+
+            st.subheader(&#34;Residual Diagnostics:&#34;)
+            plot_residual_diagnostics(fitted_model, f&#34;ARIMAX{order}&#34;)
+
+            st.write(&#34;\nLjung-Box Test Results:&#34;)
+            st.dataframe(ljung_box_results)
+
+            significance_level = st.slider(&#34;Significance Level for Ljung-Box Test:&#34;, min_value=0.01, max_value=0.10, value=0.05, step=0.01, key=&#39;lb_level&#39;)
+            interpretation = interpret_ljung_box_results(ljung_box_results, significance_level=significance_level)
+            st.markdown(f&#34;**Interpretation:** {interpretation[&#39;message&#39;]}&#34;)
+
+            if &#39;model_comparison_data&#39; not in st.session_state:
+                st.session_state[&#39;model_comparison_data&#39;] = []
+            st.session_state[&#39;model_comparison_data&#39;].append({
+                &#39;Model&#39;: f&#39;ARIMAX{order}&#39;,
+                &#39;AIC&#39;: fitted_model.aic,
+                &#39;BIC&#39;: fitted_model.bic,
+                &#39;Log-Likelihood&#39;: fitted_model.llf,
+                &#39;Parameters&#39;: len(fitted_model.params)
+            })
+            st.subheader(&#34;Model Comparison Table:&#34;)
+            comparison_df = pd.DataFrame(st.session_state[&#39;model_comparison_data&#39;])
+            st.dataframe(comparison_df.round(2))
+
+            best_model_idx = comparison_df[&#39;AIC&#39;].idxmin()
+            best_model_name = comparison_df.loc[best_model_idx, &#39;Model&#39;]
+            st.write(f&#34;\n**Best model based on AIC:** {best_model_name}&#34;)
+
+        except Exception as e:
+            st.error(f&#34;Error during model training or diagnostics: {e}&#34;)
+    else:
+        st.info(&#34;Please load synthetic data first and then train the model.&#34;)
+</code></pre>
+  <h3>Navigating Page 3</h3>
+  <ol start="1">
+<li>Navigate to “ARIMAX Model Estimation &amp; Diagnostics” in the sidebar.</li>
+<li>Ensure you have previously clicked “Apply Transformations and Test Stationarity” on Page 2, as this page relies on the </li>
+<li>strong</li>
+<li>code</li>
+<li>code</li>
+<li>code</li>
+<li>Start with a simple model, e.g., (1,0,0) or (0,0,1), and iterate based on diagnostics and information criteria. A common starting point after differencing is looking at ACF/PACF plots of the </li>
+</ol>
+ Click “Train Selected ARIMAX Model”. <strong>Review Output</strong>:  <ul>
+<li>strong</li>
+<li>strong</li>
+<li>strong</li>
+<li>strong</li>
+<li>strong</li>
+</ul>
+    Experiment: Try different combinations of (p, d, q) values and observe how AIC, BIC, and the Ljung-Box test results change. This iterative process is key to finding the optimal model. Remember, &#39;d&#39; refers to the differencing applied *within* the ARIMA model. If your input series is already differenced, &#39;d&#39; should be 0.   
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Model Persistence" duration="180">
+          Once you have identified a well-performing ARIMAX model, you’ll want to save it for future use, such as making predictions on new data or deploying it in a production environment. This step, implemented in <code>application_pages/page4.py</code>, allows you to download the trained model.  <h3>Saving and Loading Models</h3>
+  The application uses Python’s <code>pickle</code> module to serialize (save) the fitted <code>statsmodels</code> ARIMAX model object and deserialize (load) it later. <code>pickle</code> is a standard way to store Python objects.  Here’s the relevant code from <code>application_pages/page4.py</code>:  <pre><code language="python" class="python">import streamlit as st
+import pickle
+import os
+
+def run_page4():
+    st.header(&#34;4. Model Persistence&#34;)
+    st.markdown(&#34;You can download the best-performing fitted ARIMAX model for future use.&#34;)
+
+    if &#39;fitted_model&#39; in st.session_state and st.session_state[&#39;fitted_model&#39;] is not None:
+        best_model = st.session_state[&#39;fitted_model&#39;]
+        
+        # Create a dummy directory for saving locally in Streamlit environment
+        output_dir = &#39;./models_temp/&#39;
+        os.makedirs(output_dir, exist_ok=True)
+        model_filename = os.path.join(output_dir, &#39;macro_pd_arimax_taiwan.pkl&#39;)
+
+        try:
+            with open(model_filename, &#39;wb&#39;) as file:
+                pickle.dump(best_model, file)
+            
+            with open(model_filename, &#39;rb&#39;) as file:
+                st.download_button(
+                    label=&#34;Download Fitted ARIMAX Model (.pkl)&#34;,
+                    data=file,
+                    file_name=&#34;macro_pd_arimax_taiwan.pkl&#34;,
+                    mime=&#34;application/octet-stream&#34;
+                )
+            st.success(f&#34;Model ready for download.&#34;)
+            st.info(f&#34;Model details: Type - {best_model.__class__.__name__}, AIC - {best_model.aic:.2f}&#34;)
+
+        except Exception as e:
+            st.error(f&#34;Error preparing model for download: {e}&#34;)
+    else:
+        st.warning(&#34;No model has been successfully fitted yet to save.&#34;)
+</code></pre>
+  <h3>Navigating Page 4</h3>
+  <ol start="1">
+<li>Navigate to “Model Persistence” in the sidebar.</li>
+<li>Ensure you have successfully trained a model on Page 3, as the download button will only appear if a </li>
+<li>Click the “Download Fitted ARIMAX Model (.pkl)” button.</li>
+<li>The model file (</li>
+</ol>
+   Next Steps: Once downloaded, this `.pkl` file can be loaded into any Python environment using `pickle.load()` to perform forecasts or integrate the model into a larger system without re-training.   <pre><code language="python" class="python">import pickle
+
+# To load the model later
+with open(&#39;macro_pd_arimax_taiwan.pkl&#39;, &#39;rb&#39;) as file:
+    loaded_model = pickle.load(file)
+
+# You can now use loaded_model for forecasting
+# For example: loaded_model.predict(start=&#39;2025-01-01&#39;, end=&#39;2025-03-31&#39;, exog=new_exog_data)
+</code></pre>
+  
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Conclusion" duration="120">
+          Congratulations! You have successfully completed this codelab on building a macro-economic credit risk forecasting application using Streamlit and ARIMAX models.  You have learned:  <ul>
+<li>How to structure a Streamlit application with multiple pages.</li>
+<li>The process of generating and exploring synthetic time series data.</li>
+<li>The importance of stationarity for time series modeling and how to achieve it through differencing.</li>
+<li>The application of unit root tests (ADF, KPSS) to verify stationarity.</li>
+<li>The theoretical foundation and practical estimation of ARIMAX models, including the role of exogenous variables.</li>
+<li>How to evaluate model performance using information criteria (AIC, BIC) and essential residual diagnostics like ACF/PACF plots and the Ljung-Box test.</li>
+<li>The method for persisting trained machine learning models for future use.</li>
+</ul>
+  This comprehensive guide provides a solid foundation for developing more sophisticated time series forecasting applications, particularly in financial contexts where macroeconomic factors are critical. Feel free to extend this application by incorporating more complex exogenous variables, implementing model selection automation, or adding forecast visualization features. 
+
+      </google-codelab-step>
+    
+  </google-codelab>
+
+  <script>
+    (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+    m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+    })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+    ga('create', 'UA-49880327-14', 'auto');
+
+    (function() {
+      var gaCodelab = '';
+      if (gaCodelab) {
+        ga('create', gaCodelab, 'auto', {name: 'codelab'});
+      }
+
+      var gaView;
+      var parts = location.search.substring(1).split('&');
+      for (var i = 0; i < parts.length; i++) {
+        var param = parts[i].split('=');
+        if (param[0] === 'viewga') {
+          gaView = param[1];
+          break;
+        }
+      }
+      if (gaView && gaView !== gaCodelab) {
+        ga('create', gaView, 'auto', {name: 'view'});
+      }
+    })();
+  </script>
+
+</body>
+</html>

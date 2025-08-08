@@ -1,0 +1,17 @@
+{
+  "environment": "web",
+  "source": "documentation.md",
+  "format": "html",
+  "prefix": "../../",
+  "mainga": "UA-49880327-14",
+  "updated": "2025-08-08T09:26:00-04:00",
+  "id": "6890efb32642dcc3463f222e_documentation",
+  "duration": 2520,
+  "title": "Building a Macro-Economic Credit Risk Forecasting Application with Streamlit and ARIMAX",
+  "summary": "",
+  "theme": "",
+  "status": null,
+  "category": null,
+  "tags": null,
+  "url": "6890efb32642dcc3463f222e_documentation"
+}

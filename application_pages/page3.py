@@ -76,79 +76,85 @@ def train_arimax(df, target_col, exog_cols, order):
 
 def run_page3():
     st.header("3. ARIMAX Model Estimation and Diagnostics")
-    st.markdown("This section allows users to specify and estimate an ARIMAX(p,d,q) model for the transformed default rate, utilizing macroeconomic variables as exogenous regressors. The model order selection will be guided by information criteria (AIC/BIC).")
+    st.markdown("""
+    In this step, we build an **ARIMAX(p,d,q)** model to forecast the differenced default rate, using macroeconomic variables as additional inputs.  
+    This model combines the strengths of ARIMA (capturing patterns in the target series) with the influence of external factors such as GDP growth.
 
-    st.subheader("ARIMAX Model Equation:")
-    st.markdown(r"""
-    The general form of an $ARIMAX(p,d,q)$ model with $m$ exogenous regressors can be expressed as:
-    $$ (1 - \sum_{i=1}^{p} \phi_i L^i) (1 - L)^d Y_t = c + (1 + \sum_{j=1}^{q} \theta_j L^j) \epsilon_t + \sum_{k=1}^{m} \beta_k X_{k,t} $$
-    Where:
-    *   $Y_t$: The target variable at time $t$.
-    *   $L$: The lag operator.
-    *   $p$: The order of the autoregressive (AR) part.
-    *   $\phi_i$: AR coefficients.
-    *   $d$: The order of differencing (I for integrated part).
-    *   $q$: The order of the moving average (MA) part.
-    *   $\theta_j$: MA coefficients.
-    *   $c$: A constant term.
-    *   $\epsilon_t$: The white noise error term (residuals) at time $t$.
-    *   $X_{k,t}$: The $k$-th exogenous variable at time $t$.
-    *   $\beta_k$: The coefficients for the exogenous variables.
+    You’ll start by selecting the ARIMA order — the values of **p**, **d**, and **q** that define how the model uses past values, differences, and past errors.  
+    Once the model is trained, we evaluate it using **AIC** and **BIC**, where lower values mean a better balance between accuracy and complexity.
+
+    But good fit is not enough — we also check the model’s residuals.  
+    The **Ljung–Box test** and the **ACF/PACF plots** help confirm whether the model has captured all meaningful patterns, leaving residuals that are effectively random.  
+    If the p-value in the Ljung–Box test is above 0.05, it suggests no significant autocorrelation remains, meaning the model is statistically adequate.
+
+    By the end of this step, you’ll see:
+    - A complete model summary.
+    - Residual diagnostics to assess model adequacy.
+    - A comparison table showing how different models perform, with the best one highlighted and ready for download on the next page.
     """)
 
-    st.subheader("Model Order Selection Criteria:")
-    st.markdown(r"""
-    *   **Akaike Information Criterion (AIC)**:
-        $$ AIC = -2 \ln(L) + 2k $$
-    *   **Bayesian Information Criterion (BIC)**:
-        $$ BIC = -2 \ln(L) + k \ln(n) $$
-    Where: $L$ is the maximum likelihood, $k$ is the number of parameters, and $n$ is the number of observations. Lower values for AIC and BIC indicate a better model.
-    """)
 
-    st.subheader("Residual Diagnostics (Ljung-Box Test):")
-    st.markdown(r"""
-    The Ljung-Box test statistic $Q$ is given by:
-    $$ Q = n(n+2) \sum_{k=1}^{h} \frac{\hat{\rho}_k^2}{n-k} $$
-    Where: $n$ is the number of observations, $\hat{\rho}_k$ is the sample autocorrelation at lag $k$, and $h$ is the number of lags tested. A large p-value (typically $> 0.05$) supports no remaining autocorrelation.
-    """)
 
     # Model Parameters setup
     target_column = 'Default_Rate_Diff'
-    # Note: The provided notebook uses only 'GDP_Growth_YoY_%' as exogenous.
-    # The application can be extended to allow selection of 'Unemployment_%' as well.
-    exogenous_columns = ['GDP_Growth_YoY_%']
-
-    st.write(f"**Target variable:** `{target_column}`")
-    st.write(f"**Exogenous variables:** `{exogenous_columns}`")
+    # Note: The provided notebook uses only 'GDP_Growth_YoY(%)' as exogenous.
+    # The application can be extended to allow selection of 'Unemployment(%)' as well.
+    exogenous_columns = ['GDP_Growth_YoY(%)']
 
     p = st.number_input("Enter ARIMA Order (p):", min_value=0, value=1, key='p_input')
     d = st.number_input("Enter ARIMA Order (d):", min_value=0, value=0, key='d_input')
     q = st.number_input("Enter ARIMA Order (q):", min_value=0, value=0, key='q_input')
     order = (p, d, q)
 
+    trained = False
     if 'df_transformed' in st.session_state and st.button("Train Selected ARIMAX Model", key='train_button'):
         df_transformed = st.session_state['df_transformed']
         try:
             fitted_model, ljung_box_results = train_arimax(df_transformed, target_column, exogenous_columns, order)
             st.session_state['fitted_model'] = fitted_model  # Store for persistence
             st.session_state['ljung_box_results'] = ljung_box_results  # Store for display
+            trained = True
+        except Exception as e:
+            st.error(f"Error during model training or diagnostics: {e}")
 
+    if 'ljung_box_results' in st.session_state:
+        # Show model summary and diagnostics if available
+        if 'fitted_model' in st.session_state:
+            fitted_model = st.session_state['fitted_model']
             st.subheader(f"ARIMAX{order} Model Summary:")
             st.code(fitted_model.summary().as_text())
+            st.markdown("""
+            **Model Summary Explanation:**
+            - The table above shows the estimated coefficients for each parameter in the ARIMAX model, along with their standard errors, z-values, and p-values.
+            - Lower AIC/BIC values indicate a better model fit with less complexity.
+            - Significant coefficients (p < 0.05) suggest those variables have a meaningful impact on the target.
+            - Review the log-likelihood, AIC, and BIC to compare models.
+            """)
 
             st.subheader("Residual Diagnostics:")
             plot_residual_diagnostics(fitted_model, f"ARIMAX{order}")
+            st.markdown("""
+            **Residual Diagnostics Explanation:**
+            - The ACF and PACF plots above show the autocorrelation and partial autocorrelation of the model residuals.
+            - Ideally, residuals should not show significant autocorrelation, indicating the model has captured all meaningful patterns.
+            - Use the Ljung-Box test below to statistically confirm if residuals are random (p > 0.05 is desired).
+            """)
 
-            st.write("\nLjung-Box Test Results:")
-            st.dataframe(ljung_box_results)
+        st.subheader("Ljung-Box Test Results:")
+        st.markdown("""
+        The Ljung-Box test checks whether the residuals from the ARIMAX model are random (i.e., show no significant autocorrelation). A high p-value (above the selected significance level) suggests the model has adequately captured the patterns in the data.
+        """)
+        ljung_box_results = st.session_state['ljung_box_results']
+        st.dataframe(ljung_box_results)
 
-            significance_level = st.slider("Significance Level for Ljung-Box Test:", min_value=0.01, max_value=0.10, value=0.05, step=0.01, key='lb_level')
-            interpretation = interpret_ljung_box_results(ljung_box_results, significance_level=significance_level)
-            st.markdown(f"**Interpretation:** {interpretation['message']}")
-            if interpretation['status'] == 'needs_refinement':
-                st.write(f"  Problematic lags: {interpretation.get('problematic_lags', [])}")
+        significance_level = st.slider("Significance Level for Ljung-Box Test:", min_value=0.01, max_value=0.10, value=0.05, step=0.01, key='lb_level')
+        interpretation = interpret_ljung_box_results(ljung_box_results, significance_level=significance_level)
+        st.markdown(f"**Interpretation:** {interpretation['message']}")
+        if interpretation['status'] == 'needs_refinement':
+            st.write(f"  Problematic lags: {interpretation.get('problematic_lags', [])}")
 
-            # For model comparison, results could be appended to a list in session_state over multiple runs.
+        # For model comparison, results could be appended to a list in session_state over multiple runs.
+        if 'fitted_model' in st.session_state:
             if 'model_comparison_data' not in st.session_state:
                 st.session_state['model_comparison_data'] = []
             st.session_state['model_comparison_data'].append({
@@ -159,16 +165,15 @@ def run_page3():
                 'Parameters': len(fitted_model.params)
             })
             st.subheader("Model Comparison Table:")
+            st.markdown("""
+            This table summarizes the performance of each ARIMAX model you have trained. Compare AIC and BIC values to select the best model—lower values indicate a better fit with less complexity. The best model based on AIC is highlighted below.
+            """)
             comparison_df = pd.DataFrame(st.session_state['model_comparison_data'])
             st.dataframe(comparison_df.round(2))
 
             best_model_idx = comparison_df['AIC'].idxmin()
             best_model_name = comparison_df.loc[best_model_idx, 'Model']
             st.write(f"\n**Best model based on AIC:** {best_model_name}")
-
-
-        except Exception as e:
-            st.error(f"Error during model training or diagnostics: {e}")
     else:
         st.info("Please load synthetic data first and then train the model.")
 

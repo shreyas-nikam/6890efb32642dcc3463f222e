@@ -5,7 +5,13 @@ import os
 
 def run_page4():
     st.header("4. Model Persistence")
-    st.markdown("You can download the best-performing fitted ARIMAX model for future use.")
+    st.markdown("""
+    In this final step, you can **save and download** the best-performing ARIMAX model from your session.  
+    This allows you to reuse it later for forecasting without retraining, ensuring consistent results.
+
+    The downloaded file is in `.pkl` format, which can be loaded back into Python for future analysis or deployment.
+    """)
+
 
     if 'fitted_model' in st.session_state and st.session_state['fitted_model'] is not None:
         best_model = st.session_state['fitted_model']

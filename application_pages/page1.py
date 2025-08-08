@@ -5,8 +5,37 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def run_page1():
+
+    st.markdown(r"""
+
+    This lab is designed to help you understand how macroeconomic trends influence credit risk and how to capture those relationships in a predictive time series model.  
+    Using synthetic quarterly data inspired by Taiwan’s economy, you will follow a guided process to prepare, build, and evaluate an ARIMAX model.
+
+    ## Learning Objectives
+    - Understand how GDP growth, unemployment, and other indicators impact default rates.
+    - Apply statistical tests (ADF, KPSS) to check for stationarity and perform necessary transformations.
+    - Build an ARIMAX model that incorporates macroeconomic variables as exogenous inputs.
+    - Compare model configurations using AIC/BIC and interpret residual diagnostics.
+    - Save your best-performing model for reuse or deployment.
+
+    ## Lab Structure
+    1. **Data Loading & Exploration** – Load the synthetic dataset, review summary statistics, and visualize economic and credit risk trends.
+    2. **Data Pre-processing** – Apply unit root tests and transform non-stationary series to meet modeling requirements.
+    3. **Model Estimation & Diagnostics** – Train ARIMAX, assess fit with statistical criteria, and evaluate residual behavior.
+    4. **Model Persistence** – Save the trained model as a `.pkl` file for future forecasting.
+
+    ## Why This Lab
+    Macroeconomic conditions strongly influence credit behavior. This lab gives you hands-on experience in quantifying those effects and integrating them into a forecasting model that can support better risk assessment and planning.
+
+    ---
+    """)
+    
     st.header("1. Data Loading and Initial Exploration")
-    st.markdown("This section loads synthetic time series data mimicking Taiwan credit risk and macroeconomic data. It displays initial data insights and visualizations.")
+    st.markdown(r"""
+    In this step, we create and explore a synthetic quarterly dataset representing Taiwan’s credit risk and key macroeconomic indicators.  
+    The data includes default rates (target variable), GDP growth, and unemployment, with patterns that mimic real economic cycles, including a simulated recession.  
+    You will review the dataset’s structure, basic statistics, and visualizations to understand how these variables behave over time and relate to each other.
+    """)
 
     RANDOM_SEED = 42
     start_date = '2015-01-01'
@@ -35,7 +64,6 @@ def run_page1():
 
     st.subheader("Synthetic Dataset Overview:")
     st.dataframe(df_synthetic.head())
-    st.write(f"Dataset shape: {df_synthetic.shape}")
     st.write("Basic statistics:")
     st.dataframe(df_synthetic.describe())
 
@@ -70,6 +98,14 @@ def run_page1():
     plt.tight_layout()
     st.pyplot(fig)
     plt.close(fig)  # Prevent duplicate plots
+
+    st.markdown("""
+    **Graph Interpretation:**  
+    - The default rate generally trends upward, with a clear spike during the simulated recession period.  
+    - GDP growth follows cyclical patterns and drops sharply during the recession, while unemployment moves inversely to GDP.  
+    - The combined plot shows the negative relationship between GDP growth and default rates.
+    """)
+
 
 if __name__ == "__main__":
     run_page1()
